@@ -6,6 +6,8 @@ A realtime multiplayer gaming portal featuring beloved classic games:
 - ♟️ **Chess Grandmaster**: Full standard FIDE rules with legal move indicators, checkmate, stalemate, and notation history.
 - ⭕ **Neon Tic-Tac-Toe**: Rapid-fire 3x3 blitz with glowing neon strikes and score tallies.
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/vishnumorapally/multiplayer-games-hub)
+
 ---
 
 ## ✨ Key Features
