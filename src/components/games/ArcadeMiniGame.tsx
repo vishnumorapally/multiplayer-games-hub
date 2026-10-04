@@ -2,6 +2,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import { GenericMiniGameState, GameType } from '../../types';
 import { sounds } from '../../utils/sound';
 import { Flame, Trophy, Sparkles, Zap, Award, Target, HelpCircle } from 'lucide-react';
+import { TypingRaceArena } from './TypingRaceArena';
+import { FlappyDuelArena } from './FlappyDuelArena';
+import { GomokuArena } from './GomokuArena';
+import { OthelloArena } from './OthelloArena';
+import { SlidingPuzzleArena } from './SlidingPuzzleArena';
+import { ColorFloodArena } from './ColorFloodArena';
+import { ArcheryArena } from './ArcheryArena';
+import { GreedyDiceArena } from './GreedyDiceArena';
+import { ColorCardsArena } from './ColorCardsArena';
+import { BrickBreakerArena } from './BrickBreakerArena';
+import { AnagramArena } from './AnagramArena';
+import { CoinPusherArena } from './CoinPusherArena';
 
 interface ArcadeMiniGameProps {
   gameState: GenericMiniGameState;
@@ -116,7 +128,7 @@ export const ArcadeMiniGame: React.FC<ArcadeMiniGameProps> = ({
 
   // 4. TYPING SPEED RACE
   if (gType === 'typing_race') {
-    return <TypingRaceArena targetText={gameState.data?.targetText || 'Quick fingers win!'} onAction={onAction} p1={p1} p2={p2} isP1={isP1} />;
+    return <TypingRaceArena targetText={gameState.data?.targetText} onAction={onAction} p1={p1} p2={p2} isP1={isP1} />;
   }
 
   // 5. MINESWEEPER BATTLE
@@ -144,7 +156,61 @@ export const ArcadeMiniGame: React.FC<ArcadeMiniGameProps> = ({
     return <TriviaQuizArena questions={gameState.data?.questions || []} onAction={onAction} p1={p1} p2={p2} isP1={isP1} />;
   }
 
-  // 10. COLOR FLOOD / GENERAL ARCADE FALLBACK
+  // 10. FLAPPY RUSH DUEL
+  if (gType === 'flappy_duel') {
+    return <FlappyDuelArena onAction={onAction} p1={p1} p2={p2} isP1={isP1} />;
+  }
+
+  // 11. GOMOKU (FIVE IN A ROW)
+  if (gType === 'gomoku') {
+    return <GomokuArena onAction={onAction} p1={p1} p2={p2} isP1={isP1} />;
+  }
+
+  // 12. OTHELLO (REVERSI)
+  if (gType === 'othello') {
+    return <OthelloArena onAction={onAction} p1={p1} p2={p2} isP1={isP1} />;
+  }
+
+  // 13. 15 SLIDING TILE PUZZLE
+  if (gType === 'sliding_puzzle') {
+    return <SlidingPuzzleArena onAction={onAction} p1={p1} p2={p2} isP1={isP1} />;
+  }
+
+  // 14. COLOR FLOOD CONQUEST
+  if (gType === 'color_flood') {
+    return <ColorFloodArena onAction={onAction} p1={p1} p2={p2} isP1={isP1} />;
+  }
+
+  // 15. BULLSEYE TARGET ARCHERY
+  if (gType === 'target_archery') {
+    return <ArcheryArena onAction={onAction} p1={p1} p2={p2} isP1={isP1} />;
+  }
+
+  // 16. GREEDY PIG DICE GAME
+  if (gType === 'greedy_dice') {
+    return <GreedyDiceArena onAction={onAction} p1={p1} p2={p2} isP1={isP1} />;
+  }
+
+  // 17. COLOR CARDS DUEL (UNO STYLE)
+  if (gType === 'color_cards') {
+    return <ColorCardsArena onAction={onAction} p1={p1} p2={p2} isP1={isP1} />;
+  }
+
+  // 18. BRICK BREAKER SMASH
+  if (gType === 'brick_breaker') {
+    return <BrickBreakerArena onAction={onAction} p1={p1} p2={p2} isP1={isP1} />;
+  }
+
+  // 19. WORD ANAGRAM SCRAMBLE
+  if (gType === 'anagram_duel') {
+    return <AnagramArena onAction={onAction} p1={p1} p2={p2} isP1={isP1} />;
+  }
+
+  // 20. VEGAS ARCADE COIN PUSHER
+  if (gType === 'coin_pusher') {
+    return <CoinPusherArena onAction={onAction} p1={p1} p2={p2} isP1={isP1} />;
+  }
+
   return <GenericScoreChallenger gameType={gType} onAction={onAction} p1={p1} p2={p2} isP1={isP1} />;
 };
 
@@ -243,58 +309,7 @@ function ReactionTapArena({ onAction, p1, p2, isP1 }: any) {
   );
 }
 
-// Sub-Arena: Typing Speed Race
-function TypingRaceArena({ targetText, onAction, p1, p2, isP1 }: any) {
-  const [typed, setTyped] = useState('');
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setTyped(val);
-
-    if (val === targetText) {
-      sounds.playVictory();
-      onAction('arcade_action', { subAction: 'typed', data: { score: 100, gameOver: true } });
-    }
-  };
-
-  const progress = Math.min(100, Math.floor((typed.length / targetText.length) * 100));
-
-  return (
-    <div className="w-full max-w-2xl mx-auto flex flex-col items-center select-none">
-      <ScoreHeader p1={p1} p2={p2} isP1={isP1} unit="wpm" />
-
-      <div className="w-full p-6 rounded-3xl glass-panel border border-slate-800 shadow-2xl space-y-4">
-        {/* Race Track */}
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
-          <div>
-            <div className="flex justify-between text-xs text-indigo-400 font-bold mb-1">
-              <span>{p1.name}</span>
-              <span>{progress}%</span>
-            </div>
-            <div className="w-full h-3 rounded-full bg-slate-800 overflow-hidden">
-              <div className="h-full bg-indigo-500 transition-all duration-150" style={{ width: `${progress}%` }}></div>
-            </div>
-          </div>
-        </div>
-
-        {/* Text to Type */}
-        <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-lg sm:text-xl font-mono text-slate-200 tracking-wide select-none">
-          {targetText}
-        </div>
-
-        {/* Input Field */}
-        <input
-          type="text"
-          value={typed}
-          onChange={handleChange}
-          placeholder="Type the exact sentence above..."
-          className="w-full bg-slate-900 border border-indigo-500/60 rounded-2xl px-5 py-4 text-base font-bold text-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
-          autoFocus
-        />
-      </div>
-    </div>
-  );
-}
 
 // Sub-Arena: Minesweeper Battle
 function MinesweeperArena({ data, onAction, p1, p2, isP1 }: any) {

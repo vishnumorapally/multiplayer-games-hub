@@ -66,6 +66,8 @@ export interface RoomData {
   players: Player[];
   gameState: any;
   chat: ChatMessage[];
+  turnDeadline?: number | null;
+  turnTimeLimit?: number;
 }
 
 // Hand Cricket Specific

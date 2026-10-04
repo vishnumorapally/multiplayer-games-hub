@@ -264,7 +264,9 @@ export const RoomLobby: React.FC<RoomLobbyProps> = ({
   const myPlayer = room.players.find(p => p.id === myPlayerId);
 
   const currentGame = GAME_INFO[room.gameType] || GAME_INFO.hand_cricket;
-  const canStart = room.players.length >= 2;
+  const unreadyPlayers = room.players.filter(p => !p.isHost && !p.isBot && !p.isReady);
+  const allPlayersReady = room.players.length >= 2 && unreadyPlayers.length === 0;
+  const canStart = allPlayersReady;
 
   const copyInvite = () => {
     const url = `${window.location.origin}?room=${room.code}`;
@@ -491,17 +493,33 @@ export const RoomLobby: React.FC<RoomLobbyProps> = ({
                 onStartGame();
               }}
               disabled={!canStart}
-              className="w-full sm:w-auto px-10 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 disabled:opacity-40 disabled:pointer-events-none text-slate-950 font-black text-sm shadow-xl shadow-emerald-500/25 transition hover:scale-105 active:scale-95 flex items-center justify-center space-x-2"
+              className={`w-full sm:w-auto px-10 py-3.5 rounded-2xl font-black text-sm shadow-xl transition hover:scale-105 active:scale-95 flex items-center justify-center space-x-2 ${
+                canStart
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 shadow-emerald-500/25'
+                  : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed opacity-60'
+              }`}
             >
-              <Play className="w-4 h-4 fill-slate-950" />
-              <span>START MATCH ({room.players.length}/{room.maxPlayers})</span>
+              <Play className="w-4 h-4 fill-current" />
+              <span>
+                {room.players.length < 2
+                  ? `WAITING FOR PLAYERS (1/${room.maxPlayers})`
+                  : unreadyPlayers.length > 0
+                  ? `WAITING FOR ${unreadyPlayers.map(p => p.name).join(', ')} TO BE READY`
+                  : `START MATCH (${room.players.length}/${room.maxPlayers}) 🚀`}
+              </span>
             </button>
           )}
         </div>
 
         {!canStart && isHost && (
-          <p className="text-center text-xs text-slate-500 mt-3">
-            Waiting for at least 2 players to join or click "+ Add Bot" to play against AI!
+          <p className="text-center text-xs text-slate-400 mt-3 flex items-center justify-center space-x-1.5">
+            {room.players.length < 2 ? (
+              <span>Waiting for at least 2 players to join or click "+ Add Bot" to play against AI!</span>
+            ) : (
+              <span className="text-amber-400 font-bold animate-pulse">
+                ⚠️ Waiting for {unreadyPlayers.map(p => p.name).join(', ')} to click "I'm Ready!" before match can start.
+              </span>
+            )}
           </p>
         )}
       </div>

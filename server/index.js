@@ -48,6 +48,7 @@ app.get('/api/health', (req, res) => {
 const rooms = new Map();
 const socketPlayerMap = new Map();
 const roomTickIntervals = new Map();
+const roomTurnTimers = new Map();
 
 function generateRoomCode() {
   const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -68,7 +69,9 @@ function getSafeRoomData(room) {
     status: room.status,
     players: room.players,
     gameState: room.gameState,
-    chat: room.chat
+    chat: room.chat,
+    turnDeadline: room.turnDeadline || null,
+    turnTimeLimit: 30
   };
 }
 
@@ -77,6 +80,247 @@ function clearRoomInterval(roomCode) {
     clearInterval(roomTickIntervals.get(roomCode));
     roomTickIntervals.delete(roomCode);
   }
+  if (roomTurnTimers.has(roomCode)) {
+    clearTimeout(roomTurnTimers.get(roomCode));
+    roomTurnTimers.delete(roomCode);
+  }
+}
+
+function getActivePlayerId(room) {
+  if (!room || !room.gameState) return null;
+  const game = room.gameState;
+  const gt = room.gameType;
+
+  if (gt === 'chess') {
+    return game.turn === 'w' ? game.players?.white?.id : game.players?.black?.id;
+  }
+  if (gt === 'ludo' || gt === 'tictactoe' || gt === 'connect4' || gt === 'battleship' || gt === 'checkers' || gt === 'memory_match' || gt === 'dots_and_boxes') {
+    return game.currentTurn;
+  }
+  if (gt === 'hand_cricket') {
+    if (game.status === 'toss') return game.toss?.callerId;
+    if (game.status === 'choose_action') return game.toss?.winnerId;
+    if (game.status === 'innings1') {
+      const in1 = game.innings1;
+      if (in1?.currentBatNum === null && in1?.currentBowlNum !== null) return in1.batsmanId;
+      if (in1?.currentBowlNum === null && in1?.currentBatNum !== null) return in1.bowlerId;
+      return in1?.batsmanId;
+    }
+    if (game.status === 'innings2') {
+      const in2 = game.innings2;
+      if (in2?.currentBatNum === null && in2?.currentBowlNum !== null) return in2.batsmanId;
+      if (in2?.currentBowlNum === null && in2?.currentBatNum !== null) return in2.bowlerId;
+      return in2?.batsmanId;
+    }
+  }
+  if (game.turn) return game.turn;
+  if (game.data?.currentTurn) return game.data.currentTurn;
+
+  return null;
+}
+
+function handleTurnTimeout(room) {
+  if (!room || room.status !== 'playing' || !room.gameState) return;
+  const game = room.gameState;
+  if (game.status === 'game_over') return;
+
+  const gt = room.gameType;
+  const activePlayerId = getActivePlayerId(room);
+  if (!activePlayerId) return;
+
+  const player = room.players.find(p => p.id === activePlayerId) || { name: 'Player' };
+  const opponent = room.players.find(p => p.id !== activePlayerId) || room.players[0];
+
+  // 1. Games that allow Passing Turn
+  if (gt === 'ludo') {
+    const idx = game.playerOrder.indexOf(game.currentTurn);
+    game.currentTurn = game.playerOrder[(idx + 1) % game.playerOrder.length];
+    game.turnPhase = 'roll';
+    game.lastRoll = null;
+    game.validMoves = [];
+    room.chat.push({
+      id: `sys_${Date.now()}`,
+      sender: 'Timer ⏰',
+      avatar: '⏱️',
+      senderId: 'system',
+      text: `${player.name} ran out of time (> 30s)! Turn passed to ${game.players[game.currentTurn]?.name || 'next player'}.`,
+      type: 'text',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    });
+    io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
+    resetTurnTimer(room);
+    triggerBotTurnIfNeeded(room);
+  } else if (gt === 'memory_match') {
+    game.currentTurn = opponent.id;
+    game.flippedIndices = [];
+    room.chat.push({
+      id: `sys_${Date.now()}`,
+      sender: 'Timer ⏰',
+      avatar: '⏱️',
+      senderId: 'system',
+      text: `${player.name} timed out (> 30s)! Turn passed to ${opponent.name}.`,
+      type: 'text',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    });
+    io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
+    resetTurnTimer(room);
+    triggerBotTurnIfNeeded(room);
+  } else if (gt === 'battleship') {
+    game.currentTurn = opponent.id;
+    room.chat.push({
+      id: `sys_${Date.now()}`,
+      sender: 'Timer ⏰',
+      avatar: '⏱️',
+      senderId: 'system',
+      text: `${player.name} timed out (> 30s)! Torpedo turn passed to ${opponent.name}.`,
+      type: 'text',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    });
+    io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
+    resetTurnTimer(room);
+    triggerBotTurnIfNeeded(room);
+  } else if (gt === 'dots_and_boxes') {
+    game.currentTurn = opponent.id;
+    room.chat.push({
+      id: `sys_${Date.now()}`,
+      sender: 'Timer ⏰',
+      avatar: '⏱️',
+      senderId: 'system',
+      text: `${player.name} timed out (> 30s)! Turn passed to ${opponent.name}.`,
+      type: 'text',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    });
+    io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
+    resetTurnTimer(room);
+    triggerBotTurnIfNeeded(room);
+  } else if (gt === 'hand_cricket') {
+    if (game.status === 'toss') {
+      handleHandCricketToss(game, game.toss.callerId, 'heads');
+    } else if (game.status === 'choose_action') {
+      handleHandCricketActionChoice(game, game.toss.winnerId, 'bat');
+    } else if (game.status === 'innings1' || game.status === 'innings2') {
+      const randomNum = Math.floor(Math.random() * 6) + 1;
+      handleHandCricketSelection(game, activePlayerId, randomNum);
+    }
+    room.chat.push({
+      id: `sys_${Date.now()}`,
+      sender: 'Timer ⏰',
+      avatar: '⏱️',
+      senderId: 'system',
+      text: `${player.name} timed out (> 30s)! Auto-selected move.`,
+      type: 'text',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    });
+    io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
+    resetTurnTimer(room);
+    triggerBotTurnIfNeeded(room);
+  } else if (gt === 'othello') {
+    game.turn = opponent.id;
+    if (game.data) game.data.currentTurn = opponent.id;
+    room.chat.push({
+      id: `sys_${Date.now()}`,
+      sender: 'Timer ⏰',
+      avatar: '⏱️',
+      senderId: 'system',
+      text: `${player.name} timed out (> 30s)! Turn passed to ${opponent.name}.`,
+      type: 'text',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    });
+    io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
+    resetTurnTimer(room);
+    triggerBotTurnIfNeeded(room);
+  } else if (gt === 'greedy_dice') {
+    if (game.data) {
+      game.data.banked[activePlayerId] = (game.data.banked[activePlayerId] || 0) + (game.data.turnScore || 0);
+      game.data.turnScore = 0;
+      game.turn = opponent.id;
+    }
+    room.chat.push({
+      id: `sys_${Date.now()}`,
+      sender: 'Timer ⏰',
+      avatar: '⏱️',
+      senderId: 'system',
+      text: `${player.name} timed out (> 30s)! Points auto-banked and turn passed.`,
+      type: 'text',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    });
+    io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
+    resetTurnTimer(room);
+    triggerBotTurnIfNeeded(room);
+  } else if (gt === 'color_cards') {
+    if (game.data && game.data.hands && game.data.hands[activePlayerId]) {
+      const colors = ['red', 'blue', 'green', 'yellow'];
+      const values = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+      game.data.hands[activePlayerId].push({
+        color: colors[Math.floor(Math.random() * colors.length)],
+        value: values[Math.floor(Math.random() * values.length)]
+      });
+      game.turn = opponent.id;
+    }
+    room.chat.push({
+      id: `sys_${Date.now()}`,
+      sender: 'Timer ⏰',
+      avatar: '⏱️',
+      senderId: 'system',
+      text: `${player.name} timed out (> 30s)! Drew a card and turn passed.`,
+      type: 'text',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    });
+    io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
+    resetTurnTimer(room);
+    triggerBotTurnIfNeeded(room);
+  } else if (gt === 'color_flood') {
+    game.turn = opponent.id;
+    io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
+    resetTurnTimer(room);
+    triggerBotTurnIfNeeded(room);
+  }
+
+  // 2. Games without Pass-Turn Rule: Opponent Automatically Wins by Forfeit!
+  else {
+    game.status = 'game_over';
+    game.winner = opponent.id;
+    game.winReason = `⏰ ${player.name} ran out of time (> 30s)! ${opponent.name} wins by forfeit! 🏆`;
+    room.chat.push({
+      id: `sys_${Date.now()}`,
+      sender: 'Timer ⏰',
+      avatar: '🏆',
+      senderId: 'system',
+      text: `Game Over! ${player.name} took more than 30s. ${opponent.name} wins the match!`,
+      type: 'text',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    });
+    clearRoomInterval(room.code);
+    io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
+  }
+}
+
+function resetTurnTimer(room) {
+  if (roomTurnTimers.has(room.code)) {
+    clearTimeout(roomTurnTimers.get(room.code));
+    roomTurnTimers.delete(room.code);
+  }
+
+  if (!room.gameState || room.status !== 'playing' || room.gameState.status === 'game_over') {
+    room.turnDeadline = null;
+    return;
+  }
+
+  // Check if this game is a turn-based game
+  const activeId = getActivePlayerId(room);
+  if (!activeId) {
+    room.turnDeadline = null;
+    return;
+  }
+
+  // 30 seconds turn deadline
+  room.turnDeadline = Date.now() + 30000;
+
+  const timer = setTimeout(() => {
+    handleTurnTimeout(room);
+  }, 30000);
+
+  roomTurnTimers.set(room.code, timer);
 }
 
 io.on('connection', (socket) => {
@@ -231,8 +475,18 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // Verify all human players are ready before allowing host to start
+    const unreadyPlayer = room.players.find(p => !p.isHost && !p.isBot && !p.isReady);
+    if (unreadyPlayer) {
+      if (typeof callback === 'function') {
+        callback({ success: false, message: `Cannot start match yet: ${unreadyPlayer.name} has not clicked "Ready"!` });
+      }
+      return;
+    }
+
     clearRoomInterval(roomCode);
     initializeGame(room);
+    resetTurnTimer(room);
 
     io.to(roomCode).emit('game_started', getSafeRoomData(room));
     if (typeof callback === 'function') callback({ success: true });
@@ -247,6 +501,7 @@ io.on('connection', (socket) => {
 
     clearRoomInterval(roomCode);
     initializeGame(room);
+    resetTurnTimer(room);
 
     io.to(roomCode).emit('game_state_updated', getSafeRoomData(room));
     triggerBotTurnIfNeeded(room);
@@ -391,6 +646,10 @@ io.on('connection', (socket) => {
     else if (action === 'arcade_action') {
       handleArcadeAction(room, socket.id, payload);
     }
+
+    if (room.gameState && room.status === 'playing') {
+      resetTurnTimer(room);
+    }
   });
 
   // Disconnect
@@ -518,12 +777,15 @@ function handleArcadeAction(room, playerId, payload) {
     game.winReason = `⚡ ${player.name} reacted with lightning speed (${data.ms || 240}ms)! 🏆`;
     io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
   } else {
-    // Generic score addition
-    if (data?.score) player.score += data.score;
+    // Specialized & generic score addition / game over
+    if (data?.score !== undefined) {
+      player.score = data.score;
+    }
     if (data?.gameOver) {
       game.status = 'game_over';
-      game.winner = playerId;
-      game.winReason = `🎉 ${player.name} completed the challenge with ${player.score} points! 🏆`;
+      game.winner = data.winner || playerId;
+      game.winReason = data.winReason || `🎉 ${game.players[game.winner]?.name || player.name} won the match! 🏆`;
+      clearRoomInterval(room.code);
     }
     io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
   }

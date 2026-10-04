@@ -21,6 +21,7 @@ import { Game2048 } from './components/games/Game2048';
 import { SnakeBattleGame } from './components/games/SnakeBattleGame';
 import { PongGame } from './components/games/PongGame';
 import { ArcadeMiniGame } from './components/games/ArcadeMiniGame';
+import { TurnTimerBar } from './components/TurnTimerBar';
 import { Difficulty } from './types';
 import { sounds } from './utils/sound';
 
@@ -248,8 +249,11 @@ export function App() {
             onChangeGame={handleChangeGame}
           />
         ) : (
-          // 3. In-Game Arena (13 Games)
+          // 3. In-Game Arena (33 Games)
           <div className="w-full flex-1 flex flex-col items-center justify-center">
+            {room.turnDeadline && room.gameState?.status !== 'game_over' && (
+              <TurnTimerBar room={room} myPlayerId={myPlayerId} />
+            )}
             {room.gameType === 'hand_cricket' && room.gameState && (
               <HandCricketGame gameState={room.gameState} myPlayerId={myPlayerId} onAction={handleGameAction} />
             )}
