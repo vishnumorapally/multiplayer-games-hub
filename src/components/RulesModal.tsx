@@ -114,6 +114,170 @@ const RULES: Record<GameType, { title: string; icon: string; sections: { heading
       { heading: '1. Paddle Deflection', text: 'Move your paddle up and down to deflect the speeding puck.' },
       { heading: '2. First to 5 Points', text: 'Score goals past your opponent. First player to score 5 points wins!' }
     ]
+  },
+
+  // 20 New Games Rules
+  rps_boom: {
+    title: 'RPS Boom (Bomb & Shield) Rules',
+    icon: '✂️',
+    sections: [
+      { heading: '1. Standard Weapons', text: 'Rock beats Scissors, Scissors cuts Paper, Paper covers Rock.' },
+      { heading: '2. Special Weapons', text: 'Bomb 💣 destroys Rock, Paper, and Scissors! Shield 🛡️ blocks the Bomb!' },
+      { heading: '3. Target Wins', text: 'First player to win 3 rounds takes the match.' }
+    ]
+  },
+  minesweeper: {
+    title: 'Minesweeper Duel Rules',
+    icon: '💣',
+    sections: [
+      { heading: '1. Uncover Cells', text: 'Click cells to reveal how many neighboring bombs are hidden.' },
+      { heading: '2. Defusal Points', text: 'Flag bombs to gain points. Uncovering a mine triggers a penalty!' }
+    ]
+  },
+  math_blitz: {
+    title: 'Math Blitz Race Rules',
+    icon: '⚡',
+    sections: [
+      { heading: '1. Quick Equations', text: 'Solve rapid arithmetic math equations (+, -, ×) before your rival.' },
+      { heading: '2. Speed Multiplier', text: 'First player to answer correctly scores 10 points. First to 50 wins!' }
+    ]
+  },
+  typing_race: {
+    title: 'Speed Typing Duel Rules',
+    icon: '⌨️',
+    sections: [
+      { heading: '1. Arcade Words', text: 'Type each displayed word accurately into your input box.' },
+      { heading: '2. First to Complete', text: 'Complete your 5-word queue with top WPM to claim victory.' }
+    ]
+  },
+  simon_says: {
+    title: 'Simon Memory Matrix Rules',
+    icon: '🔮',
+    sections: [
+      { heading: '1. Watch Sequence', text: 'Memorize the color flashes (Red, Green, Blue, Yellow).' },
+      { heading: '2. Repeat & Expand', text: 'Tap the pads in exact order. Each turn adds +1 step to the pattern.' }
+    ]
+  },
+  reaction_tap: {
+    title: 'Lightning Tap Reflex Rules',
+    icon: '⏱️',
+    sections: [
+      { heading: '1. Waiting Phase', text: 'Watch the red indicator carefully. Do NOT click early (false start penalty!).' },
+      { heading: '2. GREEN Signal', text: 'The instant screen turns GREEN, tap as fast as possible to win the round!' }
+    ]
+  },
+  trivia_quiz: {
+    title: 'Quiz Master Trivia Rules',
+    icon: '🎓',
+    sections: [
+      { heading: '1. 4 Options', text: 'Answer questions across science, geography, history, and gaming.' },
+      { heading: '2. Fast Scoring', text: 'Choose the correct answer quickly. First player to reach 50 points wins!' }
+    ]
+  },
+  brick_breaker: {
+    title: 'Brick Breaker Smash Rules',
+    icon: '🧱',
+    sections: [
+      { heading: '1. Deflect Puck', text: 'Control your paddle left and right to bounce the ball into neon brick rows.' },
+      { heading: '2. High Score', text: 'Each brick broken scores points. Clear all rows or outscore opponent!' }
+    ]
+  },
+  gomoku: {
+    title: 'Gomoku (Five in a Row) Rules',
+    icon: '⚪',
+    sections: [
+      { heading: '1. Place Stones', text: 'Take turns placing your black or white stone on the grid intersections.' },
+      { heading: '2. 5 in a Row', text: 'First player to align 5 consecutive stones horizontally, vertically, or diagonally wins!' }
+    ]
+  },
+  othello: {
+    title: 'Othello (Reversi) Rules',
+    icon: '🌓',
+    sections: [
+      { heading: '1. Flanking Discs', text: 'Place a disc to trap one or more opponent discs between your pieces.' },
+      { heading: '2. Board Domination', text: 'All trapped pieces flip to your color. Player with the most discs at the end wins.' }
+    ]
+  },
+  flappy_duel: {
+    title: 'Flappy Rush Duel Rules',
+    icon: '🐤',
+    sections: [
+      { heading: '1. Tap to Flap', text: 'Tap screen or press Spacebar to flap wings and gain altitude.' },
+      { heading: '2. Pipe Obstacles', text: 'Navigate between pipes without crashing. Longest survival wins!' }
+    ]
+  },
+  sliding_puzzle: {
+    title: '15 Sliding Tile Puzzle Rules',
+    icon: '🧩',
+    sections: [
+      { heading: '1. Slide Tiles', text: 'Tap tiles adjacent to the empty square to shift them into place.' },
+      { heading: '2. Complete 1-15', text: 'Arrange tiles in order from 1 to 15 in the fewest moves possible.' }
+    ]
+  },
+  whack_a_mole: {
+    title: 'Whack-A-Mole Blitz Rules',
+    icon: '🔨',
+    sections: [
+      { heading: '1. Fast Whack', text: 'Tap popup moles across the 9 holes before they burrow back down.' },
+      { heading: '2. Golden Moles', text: 'Golden moles ⭐ give +3 bonus points. Player with most points wins!' }
+    ]
+  },
+  color_flood: {
+    title: 'Color Flood Conquest Rules',
+    icon: '🎨',
+    sections: [
+      { heading: '1. Pick Colors', text: 'Choose an adjacent color to absorb matching adjacent tiles into your territory.' },
+      { heading: '2. 50%+ Dominance', text: 'Conquer more than half of the grid tiles to win the match.' }
+    ]
+  },
+  tower_stack: {
+    title: 'Tower Blocks Stacker Rules',
+    icon: '🏗️',
+    sections: [
+      { heading: '1. Precise Timing', text: 'Tap to drop the moving block onto the top of your tower.' },
+      { heading: '2. Overhang Trimming', text: 'Any overhang is cut off! Stack precisely to build the tallest skyscraper.' }
+    ]
+  },
+  target_archery: {
+    title: 'Bullseye Target Archery Rules',
+    icon: '🎯',
+    sections: [
+      { heading: '1. Moving Reticle', text: 'Watch the aiming crosshair oscillate across the target.' },
+      { heading: '2. Bullseye Release', text: 'Release arrows into the yellow 10-point center for maximum score.' }
+    ]
+  },
+  greedy_dice: {
+    title: 'Greedy Pig Dice Game Rules',
+    icon: '🎲',
+    sections: [
+      { heading: '1. Roll or Bank', text: 'Roll dice repeatedly to accumulate round points. Bank to secure them permanently.' },
+      { heading: '2. Beware of 1', text: 'If you roll a 1, your round score is wiped and turn ends! First to 50 wins.' }
+    ]
+  },
+  color_cards: {
+    title: 'Color Cards Duel (Uno Style) Rules',
+    icon: '🃏',
+    sections: [
+      { heading: '1. Match Card', text: 'Match the top card by color (Red, Blue, Green, Yellow) or Number/Action.' },
+      { heading: '2. Action Cards', text: 'Play Skip 🚫, Reverse 🔄, and +2 Draw 🃏 to disrupt your opponent!' },
+      { heading: '3. Empty Hand', text: 'First player to play all cards in hand wins the game.' }
+    ]
+  },
+  anagram_duel: {
+    title: 'Word Anagram Scramble Rules',
+    icon: '📝',
+    sections: [
+      { heading: '1. Unscramble', text: 'Rearrange the scrambled letters into a valid dictionary word.' },
+      { heading: '2. Speed Duel', text: 'First to solve the word scores 10 points. First to 50 wins.' }
+    ]
+  },
+  coin_pusher: {
+    title: 'Vegas Arcade Coin Pusher Rules',
+    icon: '🪙',
+    sections: [
+      { heading: '1. Drop Coins', text: 'Time your coin drops on the upper moving shelf.' },
+      { heading: '2. Cash Cascades', text: 'Push coins and gems over the edge into your prize tray to rack up points!' }
+    ]
   }
 };
 
@@ -135,7 +299,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({
         <div className="flex items-center justify-between pb-4 border-b border-slate-800">
           <div className="flex items-center space-x-2">
             <BookOpen className="w-5 h-5 text-indigo-400" />
-            <h2 className="text-xl font-bold font-['Outfit'] text-white">How to Play Guide</h2>
+            <h2 className="text-xl font-bold font-['Outfit'] text-white">How to Play Guide (33 Games)</h2>
           </div>
           <button
             onClick={() => {
@@ -198,7 +362,7 @@ export const RulesModal: React.FC<RulesModalProps> = ({
             }}
             className="w-full py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 transition"
           >
-            Got it, Let's Play!
+            Got it, Let's Play! 🚀
           </button>
         </div>
       </div>

@@ -1,4 +1,7 @@
+export type Difficulty = 'easy' | 'medium' | 'hard';
+
 export type GameType =
+  // Original 13
   | 'hand_cricket'
   | 'ludo'
   | 'chess'
@@ -11,7 +14,28 @@ export type GameType =
   | 'wordle_duel'
   | 'game_2048'
   | 'snake_battle'
-  | 'pong_duel';
+  | 'pong_duel'
+  // 20 New Games
+  | 'rps_boom'
+  | 'minesweeper'
+  | 'math_blitz'
+  | 'typing_race'
+  | 'simon_says'
+  | 'reaction_tap'
+  | 'trivia_quiz'
+  | 'brick_breaker'
+  | 'gomoku'
+  | 'othello'
+  | 'flappy_duel'
+  | 'sliding_puzzle'
+  | 'whack_a_mole'
+  | 'color_flood'
+  | 'tower_stack'
+  | 'target_archery'
+  | 'greedy_dice'
+  | 'color_cards'
+  | 'anagram_duel'
+  | 'coin_pusher';
 
 export interface Player {
   id: string;
@@ -36,6 +60,7 @@ export interface RoomData {
   code: string;
   hostId: string;
   gameType: GameType;
+  difficulty: Difficulty;
   maxPlayers: number;
   status: 'lobby' | 'playing';
   players: Player[];
@@ -57,6 +82,7 @@ export interface HandCricketBallResult {
 export interface HandCricketState {
   gameType: 'hand_cricket';
   status: 'toss' | 'choose_action' | 'innings1' | 'innings2' | 'game_over';
+  difficulty?: Difficulty;
   players: { p1: Player; p2: Player };
   toss: {
     callerId: string;
@@ -97,6 +123,7 @@ export interface HandCricketState {
 export interface ChessState {
   gameType: 'chess';
   status: 'playing' | 'game_over';
+  difficulty?: Difficulty;
   fen: string;
   turn: 'w' | 'b';
   players: {
@@ -136,6 +163,7 @@ export interface LudoPlayerState {
 export interface LudoState {
   gameType: 'ludo';
   status: 'playing' | 'game_over';
+  difficulty?: Difficulty;
   activeOrder: LudoColor[];
   currentTurnIndex: number;
   currentColor: LudoColor;
@@ -154,6 +182,7 @@ export interface LudoState {
 export interface TicTacToeState {
   gameType: 'tictactoe';
   status: 'playing' | 'game_over';
+  difficulty?: Difficulty;
   board: (string | null)[];
   turn: 'X' | 'O';
   players: {
@@ -169,6 +198,7 @@ export interface TicTacToeState {
 export interface Connect4State {
   gameType: 'connect4';
   status: 'playing' | 'game_over';
+  difficulty?: Difficulty;
   board: ('R' | 'Y' | null)[][];
   turn: 'R' | 'Y';
   players: {
@@ -185,6 +215,7 @@ export interface Connect4State {
 export interface BattleshipState {
   gameType: 'battleship';
   status: 'playing' | 'game_over';
+  difficulty?: Difficulty;
   turn: string;
   players: Record<string, {
     id: string;
@@ -206,6 +237,7 @@ export interface BattleshipState {
 export interface CheckersState {
   gameType: 'checkers';
   status: 'playing' | 'game_over';
+  difficulty?: Difficulty;
   board: ('r' | 'b' | 'R' | 'B' | null)[][];
   turn: 'r' | 'b';
   players: {
@@ -221,6 +253,7 @@ export interface CheckersState {
 export interface MemoryMatchState {
   gameType: 'memory_match';
   status: 'playing' | 'game_over';
+  difficulty?: Difficulty;
   deck: { id: number; emoji: string; isFlipped: boolean; isMatched: boolean; matchedBy: string | null }[];
   turn: string;
   currentFlips: number[];
@@ -236,6 +269,7 @@ export interface MemoryMatchState {
 export interface DotsAndBoxesState {
   gameType: 'dots_and_boxes';
   status: 'playing' | 'game_over';
+  difficulty?: Difficulty;
   turn: string;
   players: Record<string, Player & { color: string; score: number }>;
   playerIds: [string, string];
@@ -252,6 +286,7 @@ export interface DotsAndBoxesState {
 export interface WordleDuelState {
   gameType: 'wordle_duel';
   status: 'playing' | 'game_over';
+  difficulty?: Difficulty;
   targetWord: string;
   wordLength: number;
   maxGuesses: number;
@@ -269,6 +304,7 @@ export interface WordleDuelState {
 export interface Game2048State {
   gameType: 'game_2048';
   status: 'playing' | 'game_over';
+  difficulty?: Difficulty;
   targetTile: number;
   players: Record<string, Player & {
     board: number[][];
@@ -285,6 +321,7 @@ export interface Game2048State {
 export interface SnakeBattleState {
   gameType: 'snake_battle';
   status: 'playing' | 'game_over';
+  difficulty?: Difficulty;
   gridSize: number;
   food: [number, number];
   players: Record<string, Player & {
@@ -303,6 +340,7 @@ export interface SnakeBattleState {
 export interface PongDuelState {
   gameType: 'pong_duel';
   status: 'playing' | 'game_over';
+  difficulty?: Difficulty;
   scoreLimit: number;
   ball: { x: number; y: number; vx: number; vy: number };
   players: Record<string, Player & {
@@ -312,5 +350,20 @@ export interface PongDuelState {
   }>;
   playerIds: [string, string];
   winner: string | null;
+  winReason: string;
+}
+
+// --- NEW 20 GAMES STATES (Generic / Specialized) ---
+export interface GenericMiniGameState {
+  gameType: GameType;
+  status: 'playing' | 'game_over';
+  difficulty: Difficulty;
+  turn?: string;
+  players: Record<string, Player & { score: number; stateData?: any }>;
+  playerIds: [string, string];
+  round: number;
+  maxRounds?: number;
+  data: any; // Game-specific board, question, deck, etc.
+  winner: string | 'draw' | null;
   winReason: string;
 }

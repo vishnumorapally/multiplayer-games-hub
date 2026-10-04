@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { RoomData, GameType } from '../types';
+import { RoomData, GameType, Difficulty } from '../types';
 import { sounds } from '../utils/sound';
-import { Copy, Check, Bot, Play, UserCheck, UserX, Crown, Shield } from 'lucide-react';
+import { Copy, Check, Bot, Play, UserCheck, UserX, Crown, Shield, Gauge } from 'lucide-react';
 
 interface RoomLobbyProps {
   room: RoomData;
@@ -14,6 +14,7 @@ interface RoomLobbyProps {
 }
 
 const GAME_INFO: Record<GameType, { title: string; icon: string; min: number; max: number; desc: string }> = {
+  // 13 Original
   hand_cricket: {
     title: 'Hand Cricket',
     icon: '🏏',
@@ -104,6 +105,148 @@ const GAME_INFO: Record<GameType, { title: string; icon: string; min: number; ma
     min: 2,
     max: 2,
     desc: 'High-speed paddle deflection arena. Defend your goal and score first to 5 points!'
+  },
+
+  // 20 New Games
+  rps_boom: {
+    title: 'RPS Boom (Bomb & Shield)',
+    icon: '✂️',
+    min: 2,
+    max: 2,
+    desc: 'Extended Rock-Paper-Scissors with tactical Bomb & Shield. First to 3 round wins!'
+  },
+  minesweeper: {
+    title: 'Minesweeper Duel',
+    icon: '💣',
+    min: 2,
+    max: 2,
+    desc: 'Head-to-head grid defusal! Reveal safe cells, flag hidden mines, and avoid bombs.'
+  },
+  math_blitz: {
+    title: 'Math Blitz Race',
+    icon: '⚡',
+    min: 2,
+    max: 2,
+    desc: 'Rapid mental arithmetic duel! Solve rapid equations before your opponent.'
+  },
+  typing_race: {
+    title: 'Speed Typing Duel',
+    icon: '⌨️',
+    min: 2,
+    max: 2,
+    desc: 'Competitive WPM keyboard race! Type arcade words with high accuracy and speed.'
+  },
+  simon_says: {
+    title: 'Simon Memory Matrix',
+    icon: '🔮',
+    min: 2,
+    max: 2,
+    desc: 'Repeat the expanding 4-color audio-visual sequence with perfect recall.'
+  },
+  reaction_tap: {
+    title: 'Lightning Tap Reflex',
+    icon: '⏱️',
+    min: 2,
+    max: 2,
+    desc: 'Wait for green signal then TAP with millisecond reaction time!'
+  },
+  trivia_quiz: {
+    title: 'Quiz Master Trivia',
+    icon: '🎓',
+    min: 2,
+    max: 2,
+    desc: 'Multiplayer trivia battle! Science, geography, pop culture, sports, and world lore.'
+  },
+  brick_breaker: {
+    title: 'Brick Breaker Smash',
+    icon: '🧱',
+    min: 2,
+    max: 2,
+    desc: 'Retro paddle breakout arena! Shatter neon bricks and race for maximum score.'
+  },
+  gomoku: {
+    title: 'Gomoku (Five in a Row)',
+    icon: '⚪',
+    min: 2,
+    max: 2,
+    desc: 'Ancient 15x15 board duel! Align 5 stones horizontally, vertically, or diagonally.'
+  },
+  othello: {
+    title: 'Othello (Reversi)',
+    icon: '🌓',
+    min: 2,
+    max: 2,
+    desc: 'Trap and flip opponent discs across the 8x8 grid to dominate the board.'
+  },
+  flappy_duel: {
+    title: 'Flappy Rush Duel',
+    icon: '🐤',
+    min: 2,
+    max: 2,
+    desc: 'Tap to flap through pipes! Survive longer and rack up points in flight.'
+  },
+  sliding_puzzle: {
+    title: '15 Sliding Tile Puzzle',
+    icon: '🧩',
+    min: 2,
+    max: 2,
+    desc: 'Slide number tiles into numerical order 1 to 15 in minimum moves.'
+  },
+  whack_a_mole: {
+    title: 'Whack-A-Mole Blitz',
+    icon: '🔨',
+    min: 2,
+    max: 2,
+    desc: 'Hit popup moles fast across 9 holes! Golden moles give +3 bonus points.'
+  },
+  color_flood: {
+    title: 'Color Flood Conquest',
+    icon: '🎨',
+    min: 2,
+    max: 2,
+    desc: 'Flood-fill and conquer territory from your starting corner to claim victory.'
+  },
+  tower_stack: {
+    title: 'Tower Blocks Stacker',
+    icon: '🏗️',
+    min: 2,
+    max: 2,
+    desc: 'Time your drops to stack oscillating blocks! Perfect alignment keeps towers wide.'
+  },
+  target_archery: {
+    title: 'Bullseye Target Archery',
+    icon: '🎯',
+    min: 2,
+    max: 2,
+    desc: 'Aim the moving reticle and release arrows into the 10-point yellow bullseye.'
+  },
+  greedy_dice: {
+    title: 'Greedy Pig Dice Game',
+    icon: '🎲',
+    min: 2,
+    max: 2,
+    desc: 'Roll dice to accumulate points. Bank wisely, rolling a 1 wipes your round score!'
+  },
+  color_cards: {
+    title: 'Color Cards Duel (Uno Style)',
+    icon: '🃏',
+    min: 2,
+    max: 2,
+    desc: 'Match cards by color or number! Play Skip, Reverse, and +2. Empty hand to win.'
+  },
+  anagram_duel: {
+    title: 'Word Anagram Scramble',
+    icon: '📝',
+    min: 2,
+    max: 2,
+    desc: 'Unscramble jumbled letters into valid words before time runs out.'
+  },
+  coin_pusher: {
+    title: 'Vegas Arcade Coin Pusher',
+    icon: '🪙',
+    min: 2,
+    max: 2,
+    desc: 'Drop shiny coins onto moving pusher tiers! Trigger cascades of coins and jackpot prizes.'
   }
 };
 
@@ -131,15 +274,26 @@ export const RoomLobby: React.FC<RoomLobbyProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const difficultyBadge = {
+    easy: { label: 'EASY BOT', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
+    medium: { label: 'MEDIUM BOT', color: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
+    hard: { label: 'HARD BOT (EXPERT)', color: 'bg-rose-500/20 text-rose-300 border-rose-500/30' }
+  }[room.difficulty || 'medium'];
+
   return (
     <div className="w-full max-w-3xl mx-auto space-y-6 animate-in fade-in select-none">
       {/* Room Header Card */}
       <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-indigo-500/30 text-center relative overflow-hidden shadow-2xl">
         <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
-        <span className="text-xs uppercase font-extrabold tracking-widest px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-          WAITING ROOM
-        </span>
+        <div className="flex items-center justify-center gap-2">
+          <span className="text-xs uppercase font-extrabold tracking-widest px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+            WAITING ROOM
+          </span>
+          <span className={`text-xs uppercase font-extrabold tracking-widest px-3 py-1 rounded-full border ${difficultyBadge.color}`}>
+            {difficultyBadge.label}
+          </span>
+        </div>
 
         <h1 className="mt-3 text-3xl sm:text-4xl font-black font-['Outfit'] tracking-tight text-white flex items-center justify-center space-x-3">
           <span>{currentGame.icon}</span>
@@ -165,14 +319,14 @@ export const RoomLobby: React.FC<RoomLobbyProps> = ({
           </button>
         </div>
 
-        {/* Host Game Switcher */}
+        {/* Host Game Switcher (33 Games) */}
         {isHost && (
           <div className="mt-6 pt-5 border-t border-slate-800">
             <div className="text-xs font-bold text-slate-400 mb-2 flex items-center justify-center space-x-1">
               <Crown className="w-3.5 h-3.5 text-amber-400" />
-              <span>Switch Game in this Room (13 Games):</span>
+              <span>Host: Switch Game in this Room (33 Games):</span>
             </div>
-            <div className="flex flex-wrap items-center justify-center gap-1.5 max-h-36 overflow-y-auto p-1">
+            <div className="flex flex-wrap items-center justify-center gap-1.5 max-h-40 overflow-y-auto p-1">
               {(Object.keys(GAME_INFO) as GameType[]).map((g) => (
                 <button
                   key={g}
@@ -320,13 +474,13 @@ export const RoomLobby: React.FC<RoomLobbyProps> = ({
                 sounds.playClick();
                 onToggleReady();
               }}
-              className={`w-full sm:w-auto py-3.5 px-8 rounded-2xl font-bold text-sm transition shadow-lg ${
+              className={`w-full sm:w-auto px-8 py-3.5 rounded-2xl font-bold text-sm transition ${
                 myPlayer?.isReady
-                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30'
-                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+                  ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-600/25'
+                  : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/25'
               }`}
             >
-              {myPlayer?.isReady ? '✓ Ready (Click to Unready)' : 'Ready Up!'}
+              {myPlayer?.isReady ? 'Cancel Ready' : "I'm Ready!"}
             </button>
           )}
 
@@ -337,17 +491,17 @@ export const RoomLobby: React.FC<RoomLobbyProps> = ({
                 onStartGame();
               }}
               disabled={!canStart}
-              className="w-full sm:w-auto flex-1 max-w-sm flex items-center justify-center space-x-2 py-4 px-8 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600 hover:from-emerald-400 hover:to-indigo-500 disabled:opacity-40 disabled:hover:scale-100 text-slate-950 font-black text-base shadow-xl shadow-emerald-500/25 transition hover:scale-102 active:scale-98"
+              className="w-full sm:w-auto px-10 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 disabled:opacity-40 disabled:pointer-events-none text-slate-950 font-black text-sm shadow-xl shadow-emerald-500/25 transition hover:scale-105 active:scale-95 flex items-center justify-center space-x-2"
             >
-              <Play className="w-5 h-5 fill-slate-950" />
-              <span>START GAME</span>
+              <Play className="w-4 h-4 fill-slate-950" />
+              <span>START MATCH ({room.players.length}/{room.maxPlayers})</span>
             </button>
           )}
         </div>
 
-        {!canStart && (
-          <p className="mt-3 text-center text-xs text-amber-400 font-medium">
-            ⚠️ Need at least 2 players to start! Click "+ Add Bot" to test instantly or invite a friend.
+        {!canStart && isHost && (
+          <p className="text-center text-xs text-slate-500 mt-3">
+            Waiting for at least 2 players to join or click "+ Add Bot" to play against AI!
           </p>
         )}
       </div>

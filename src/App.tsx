@@ -20,6 +20,8 @@ import { WordleDuelGame } from './components/games/WordleDuelGame';
 import { Game2048 } from './components/games/Game2048';
 import { SnakeBattleGame } from './components/games/SnakeBattleGame';
 import { PongGame } from './components/games/PongGame';
+import { ArcadeMiniGame } from './components/games/ArcadeMiniGame';
+import { Difficulty } from './types';
 import { sounds } from './utils/sound';
 
 export function App() {
@@ -101,9 +103,9 @@ export function App() {
     }
   }, [room?.code]);
 
-  const handleCreateRoom = (playerName: string, avatar: string, gameType: GameType) => {
+  const handleCreateRoom = (playerName: string, avatar: string, gameType: GameType, difficulty: Difficulty = 'medium') => {
     const socket = getSocket();
-    socket.emit('create_room', { playerName, avatar, gameType }, (res: any) => {
+    socket.emit('create_room', { playerName, avatar, gameType, difficulty }, (res: any) => {
       if (res?.success) {
         setRoom(res.room);
         setMyPlayerId(socket.id || '');
@@ -125,10 +127,10 @@ export function App() {
     });
   };
 
-  // 1-Click Solo Play against Bot
-  const handleSoloBotPlay = (playerName: string, avatar: string, gameType: GameType) => {
+  // 1-Click Solo Play against Bot with Difficulty
+  const handleSoloBotPlay = (playerName: string, avatar: string, gameType: GameType, difficulty: Difficulty = 'medium') => {
     const socket = getSocket();
-    socket.emit('create_room', { playerName, avatar, gameType }, (res: any) => {
+    socket.emit('create_room', { playerName, avatar, gameType, difficulty }, (res: any) => {
       if (res?.success) {
         const roomCode = res.room.code;
         setRoom(res.room);
@@ -286,6 +288,14 @@ export function App() {
             )}
             {room.gameType === 'pong_duel' && room.gameState && (
               <PongGame gameState={room.gameState} myPlayerId={myPlayerId} onAction={handleGameAction} />
+            )}
+            {/* 20 New Arcade Games */}
+            {![
+              'hand_cricket', 'chess', 'ludo', 'tictactoe', 'connect4', 'battleship',
+              'checkers', 'memory_match', 'dots_and_boxes', 'wordle_duel', 'game_2048',
+              'snake_battle', 'pong_duel'
+            ].includes(room.gameType) && room.gameState && (
+              <ArcadeMiniGame gameState={room.gameState} myPlayerId={myPlayerId} onAction={handleGameAction} />
             )}
           </div>
         )}

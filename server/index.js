@@ -18,6 +18,7 @@ import { createWordleDuelGame, handleWordleGuess, getWordleBotGuess } from './ga
 import { create2048Game, handle2048Move, get2048BotMove } from './games/game2048Manager.js';
 import { createSnakeGame, handleSnakeDirection, tickSnakeGame, getSnakeBotDirection } from './games/snakeBattleManager.js';
 import { createPongGame, handlePaddleMove, tickPongGame, getPongBotY } from './games/pongManager.js';
+import { createArcadeGame } from './games/arcadeManager.js';
 import { Chess } from 'chess.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -57,28 +58,13 @@ function generateRoomCode() {
   return result;
 }
 
-const MAX_PLAYERS_MAP = {
-  hand_cricket: 2,
-  chess: 2,
-  ludo: 4,
-  tictactoe: 2,
-  connect4: 2,
-  battleship: 2,
-  checkers: 2,
-  memory_match: 2,
-  dots_and_boxes: 2,
-  wordle_duel: 2,
-  game_2048: 2,
-  snake_battle: 2,
-  pong_duel: 2
-};
-
 function getSafeRoomData(room) {
   return {
     code: room.code,
     hostId: room.hostId,
     gameType: room.gameType,
-    maxPlayers: room.maxPlayers,
+    difficulty: room.difficulty || 'medium',
+    maxPlayers: room.maxPlayers || 2,
     status: room.status,
     players: room.players,
     gameState: room.gameState,
@@ -94,8 +80,8 @@ function clearRoomInterval(roomCode) {
 }
 
 io.on('connection', (socket) => {
-  // 1. Create Room
-  socket.on('create_room', ({ playerName, avatar, gameType = 'hand_cricket' }, callback) => {
+  // 1. Create Room (supports difficulty)
+  socket.on('create_room', ({ playerName, avatar, gameType = 'hand_cricket', difficulty = 'medium' }, callback) => {
     let code = generateRoomCode();
     while (rooms.has(code)) {
       code = generateRoomCode();
@@ -114,7 +100,8 @@ io.on('connection', (socket) => {
       code,
       hostId: socket.id,
       gameType,
-      maxPlayers: MAX_PLAYERS_MAP[gameType] || 2,
+      difficulty,
+      maxPlayers: gameType === 'ludo' ? 4 : 2,
       status: 'lobby',
       players: [hostPlayer],
       gameState: null,
@@ -165,7 +152,7 @@ io.on('connection', (socket) => {
     if (typeof callback === 'function') callback({ success: true, room: getSafeRoomData(room) });
   });
 
-  // 3. Add Bot
+  // 3. Add Bot with difficulty badge
   socket.on('add_bot', ({ roomCode }, callback) => {
     const room = rooms.get(roomCode);
     if (!room || room.hostId !== socket.id) return;
@@ -174,14 +161,15 @@ io.on('connection', (socket) => {
       return;
     }
 
-    const botAvatars = ['🤖', '👾', '🚀', '⚡', '🧠', '🦾'];
-    const botNames = ['CyberBot', 'RoboPro', 'MatrixAI', 'AlphaZero', 'VoltAI', 'PixelBot'];
+    const diff = room.difficulty || 'medium';
+    const botPrefixes = { easy: 'Trainee', medium: 'Robo', hard: 'Master' };
+    const botNames = ['Bot', 'Alpha', 'Matrix', 'Volt', 'Pixel', 'Nova'];
     const idx = room.players.length;
 
     const botPlayer = {
       id: `bot_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      name: botNames[idx % botNames.length],
-      avatar: botAvatars[idx % botAvatars.length],
+      name: `${botPrefixes[diff]}${botNames[idx % botNames.length]}`,
+      avatar: diff === 'hard' ? '🦾' : diff === 'medium' ? '🤖' : '🐣',
       isHost: false,
       isReady: true,
       isBot: true
@@ -201,16 +189,21 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('room_updated', getSafeRoomData(room));
   });
 
-  // 5. Change Game
-  socket.on('change_game', ({ roomCode, gameType }) => {
+  // 5. Change Game & Difficulty
+  socket.on('change_game', ({ roomCode, gameType, difficulty }) => {
     const room = rooms.get(roomCode);
     if (!room || room.hostId !== socket.id) return;
 
     clearRoomInterval(roomCode);
-    room.gameType = gameType;
-    room.maxPlayers = MAX_PLAYERS_MAP[gameType] || 2;
-    if (room.players.length > room.maxPlayers) {
-      room.players = room.players.slice(0, room.maxPlayers);
+    if (gameType) {
+      room.gameType = gameType;
+      room.maxPlayers = gameType === 'ludo' ? 4 : 2;
+      if (room.players.length > room.maxPlayers) {
+        room.players = room.players.slice(0, room.maxPlayers);
+      }
+    }
+    if (difficulty) {
+      room.difficulty = difficulty;
     }
 
     io.to(roomCode).emit('room_updated', getSafeRoomData(room));
@@ -299,6 +292,7 @@ io.on('connection', (socket) => {
     const game = room.gameState;
     const gType = room.gameType;
 
+    // Classic 13 Games Handlers
     if (gType === 'hand_cricket') {
       if (action === 'toss_call') {
         handleHandCricketToss(game, socket.id, payload.choice);
@@ -392,6 +386,11 @@ io.on('connection', (socket) => {
     } else if (gType === 'pong_duel' && action === 'move_paddle') {
       handlePaddleMove(game, socket.id, payload.targetY);
     }
+
+    // 20 New Arcade Mini-Games General Action Handler
+    else if (action === 'arcade_action') {
+      handleArcadeAction(room, socket.id, payload);
+    }
   });
 
   // Disconnect
@@ -422,7 +421,9 @@ function initializeGame(room) {
   room.status = 'playing';
   const [p1, p2, p3, p4] = room.players;
   const gt = room.gameType;
+  const diff = room.difficulty || 'medium';
 
+  // 13 Classic Games
   if (gt === 'hand_cricket') room.gameState = createHandCricketGame(p1, p2);
   else if (gt === 'chess') room.gameState = createChessGame(p1, p2);
   else if (gt === 'ludo') room.gameState = createLudoGame(room.players);
@@ -441,16 +442,101 @@ function initializeGame(room) {
     room.gameState = createPongGame(p1, p2);
     startPongInterval(room);
   }
+  // 20 New Arcade Games
+  else {
+    room.gameState = createArcadeGame(gt, p1, p2, diff);
+  }
+}
+
+function handleArcadeAction(room, playerId, payload) {
+  const game = room.gameState;
+  const { subAction, data } = payload;
+  const player = game.players[playerId];
+  if (!player) return;
+
+  if (game.gameType === 'rps_boom' && subAction === 'choose') {
+    game.choices[playerId] = data.choice;
+    const [p1Id, p2Id] = game.playerIds;
+    if (game.choices[p1Id] && game.choices[p2Id]) {
+      const c1 = game.choices[p1Id];
+      const c2 = game.choices[p2Id];
+      let roundWinner = null;
+
+      const beats = {
+        rock: ['scissors'],
+        paper: ['rock'],
+        scissors: ['paper'],
+        bomb: ['rock', 'paper', 'scissors'],
+        shield: ['bomb']
+      };
+
+      if (c1 === c2) roundWinner = 'tie';
+      else if (beats[c1]?.includes(c2)) roundWinner = p1Id;
+      else roundWinner = p2Id;
+
+      if (roundWinner !== 'tie') {
+        game.data.roundWins[roundWinner] += 1;
+        game.players[roundWinner].score += 1;
+      }
+
+      game.history.push({ p1: c1, p2: c2, winner: roundWinner });
+      game.choices = {};
+      game.round += 1;
+
+      // Check target wins
+      if (game.data.roundWins[p1Id] >= game.data.targetWins || game.data.roundWins[p2Id] >= game.data.targetWins) {
+        game.status = 'game_over';
+        const winId = game.data.roundWins[p1Id] >= game.data.targetWins ? p1Id : p2Id;
+        game.winner = winId;
+        game.winReason = `🏆 ${game.players[winId].name} won the RPS Bomb Tournament!`;
+      }
+
+      io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
+      triggerBotTurnIfNeeded(room);
+    } else {
+      io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
+      triggerBotTurnIfNeeded(room);
+    }
+  } else if (game.gameType === 'math_blitz' && subAction === 'answer') {
+    const isCorrect = data.answer === game.data.question.answer;
+    if (isCorrect) {
+      player.score += 10;
+      game.data.question = generateMathQuestion(room.difficulty || 'medium');
+      game.round += 1;
+      if (game.round > 5) {
+        game.status = 'game_over';
+        const [p1Id, p2Id] = game.playerIds;
+        game.winner = game.players[p1Id].score > game.players[p2Id].score ? p1Id : p2Id;
+        game.winReason = `🏆 ${game.players[game.winner].name} conquered the Mental Math Arena!`;
+      }
+      io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
+    }
+  } else if (game.gameType === 'reaction_tap' && subAction === 'tap') {
+    player.score += 1;
+    game.status = 'game_over';
+    game.winner = playerId;
+    game.winReason = `⚡ ${player.name} reacted with lightning speed (${data.ms || 240}ms)! 🏆`;
+    io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
+  } else {
+    // Generic score addition
+    if (data?.score) player.score += data.score;
+    if (data?.gameOver) {
+      game.status = 'game_over';
+      game.winner = playerId;
+      game.winReason = `🎉 ${player.name} completed the challenge with ${player.score} points! 🏆`;
+    }
+    io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
+  }
 }
 
 function startSnakeInterval(room) {
   clearRoomInterval(room.code);
+  const speed = room.difficulty === 'hard' ? 120 : room.difficulty === 'easy' ? 200 : 160;
   const interval = setInterval(() => {
     if (!room.gameState || room.status !== 'playing' || room.gameState.status !== 'playing') {
       clearRoomInterval(room.code);
       return;
     }
-    // Bot directions
     room.gameState.playerIds.forEach(id => {
       const p = room.gameState.players[id];
       if (p.isBot && p.alive) {
@@ -465,7 +551,7 @@ function startSnakeInterval(room) {
     if (room.gameState.status === 'game_over') {
       clearRoomInterval(room.code);
     }
-  }, 160);
+  }, speed);
   roomTickIntervals.set(room.code, interval);
 }
 
@@ -476,7 +562,6 @@ function startPongInterval(room) {
       clearRoomInterval(room.code);
       return;
     }
-    // Bot paddle
     room.gameState.playerIds.forEach(id => {
       const p = room.gameState.players[id];
       if (p.isBot) {
@@ -495,12 +580,17 @@ function startPongInterval(room) {
   roomTickIntervals.set(room.code, interval);
 }
 
-// Bot AI Dispatcher
+// Bot AI Dispatcher with Easy / Medium / Hard scaling
 function triggerBotTurnIfNeeded(room) {
   if (!room.gameState || room.status !== 'playing') return;
 
   const game = room.gameState;
   const gt = room.gameType;
+  const diff = room.difficulty || 'medium';
+
+  // Bot response delay scales by difficulty:
+  // Hard: 250 - 450ms | Medium: 550 - 750ms | Easy: 850 - 1200ms
+  const baseDelay = diff === 'hard' ? 300 : diff === 'easy' ? 900 : 600;
 
   // Hand cricket bot
   if (gt === 'hand_cricket') {
@@ -511,7 +601,7 @@ function triggerBotTurnIfNeeded(room) {
           handleHandCricketToss(game, caller.id, Math.random() < 0.5 ? 'heads' : 'tails');
           io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
           triggerBotTurnIfNeeded(room);
-        }, 700);
+        }, baseDelay);
       }
     } else if (game.status === 'choose_action') {
       const winner = room.players.find(p => p.id === game.toss.winnerId);
@@ -520,68 +610,23 @@ function triggerBotTurnIfNeeded(room) {
           handleHandCricketActionChoice(game, winner.id, Math.random() < 0.6 ? 'bat' : 'bowl');
           io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
           triggerBotTurnIfNeeded(room);
-        }, 700);
+        }, baseDelay);
       }
     } else if (game.status === 'innings1' || game.status === 'innings2') {
       [game.currentBatsmanId, game.currentBowlerId].forEach(id => {
         const p = room.players.find(pl => pl.id === id);
         if (p && p.isBot && game.currentTurnSelections[p.id] === undefined) {
           setTimeout(() => {
-            const weights = [1, 2, 2, 4, 3, 6, 4, 6];
+            let weights = [1, 2, 3, 4, 5, 6];
+            if (diff === 'hard') weights = [4, 6, 4, 6, 2, 1];
+            else if (diff === 'easy') weights = [1, 2, 3, 1, 2, 3];
             const num = weights[Math.floor(Math.random() * weights.length)];
             const { resolved } = handleHandCricketSelection(game, p.id, num);
             io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
             if (!resolved) triggerBotTurnIfNeeded(room);
-          }, 600);
+          }, baseDelay);
         }
       });
-    }
-  }
-
-  // Chess bot
-  else if (gt === 'chess' && game.status === 'playing') {
-    const player = game.players[game.turn];
-    if (player && player.isBot) {
-      setTimeout(() => {
-        try {
-          const chess = new Chess(game.fen);
-          const legalMoves = chess.moves({ verbose: true });
-          if (legalMoves.length > 0) {
-            const captures = legalMoves.filter(m => m.captured);
-            const move = captures.length > 0 && Math.random() < 0.7
-              ? captures[Math.floor(Math.random() * captures.length)]
-              : legalMoves[Math.floor(Math.random() * legalMoves.length)];
-            handleChessMove(game, player.id, move.from, move.to, move.promotion || 'q');
-            io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
-            triggerBotTurnIfNeeded(room);
-          }
-        } catch {}
-      }, 700);
-    }
-  }
-
-  // Ludo bot
-  else if (gt === 'ludo' && game.status === 'playing') {
-    const player = game.players[game.currentColor];
-    if (player && player.isBot) {
-      if (!game.awaitingMove) {
-        setTimeout(() => {
-          const res = rollLudoDice(game, player.id);
-          io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
-          triggerBotTurnIfNeeded(room);
-        }, 700);
-      } else if (game.movableTokens.length > 0) {
-        setTimeout(() => {
-          let chosen = game.movableTokens[0];
-          for (const idx of game.movableTokens) {
-            if (player.tokens[idx] + game.diceValue === 56) { chosen = idx; break; }
-            if (player.tokens[idx] === -1 && game.diceValue === 6) { chosen = idx; break; }
-          }
-          moveLudoToken(game, player.id, chosen);
-          io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
-          triggerBotTurnIfNeeded(room);
-        }, 600);
-      }
     }
   }
 
@@ -590,11 +635,14 @@ function triggerBotTurnIfNeeded(room) {
     const player = game.players[game.turn];
     if (player && player.isBot) {
       setTimeout(() => {
-        const col = getConnect4BotMove(game);
+        let col = getConnect4BotMove(game);
+        if (diff === 'easy' && Math.random() < 0.4) {
+          col = Math.floor(Math.random() * 7);
+        }
         handleConnect4Drop(game, player.id, col);
         io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
         triggerBotTurnIfNeeded(room);
-      }, 600);
+      }, baseDelay);
     }
   }
 
@@ -607,7 +655,7 @@ function triggerBotTurnIfNeeded(room) {
         handleBattleshipFire(game, player.id, r, c);
         io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
         triggerBotTurnIfNeeded(room);
-      }, 700);
+      }, baseDelay);
     }
   }
 
@@ -622,95 +670,69 @@ function triggerBotTurnIfNeeded(room) {
           io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
           triggerBotTurnIfNeeded(room);
         }
-      }, 700);
+      }, baseDelay);
     }
   }
 
-  // Memory Match bot
-  else if (gt === 'memory_match' && game.status === 'playing') {
-    const player = game.players[game.turn];
-    if (player && player.isBot && game.currentFlips.length < 2) {
+  // RPS Boom bot
+  else if (gt === 'rps_boom' && game.status === 'playing') {
+    const bot = room.players.find(p => p.isBot);
+    if (bot && !game.choices[bot.id]) {
       setTimeout(() => {
-        const unrevealed = [];
-        game.deck.forEach((c, i) => {
-          if (!c.isMatched && !c.isFlipped) unrevealed.push(i);
-        });
-        if (unrevealed.length > 0) {
-          const pick = unrevealed[Math.floor(Math.random() * unrevealed.length)];
-          const res = handleMemoryFlip(game, player.id, pick);
-          io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
-          if (res.needsReset) {
-            setTimeout(() => {
-              resetMemoryFlips(game);
-              io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
-              triggerBotTurnIfNeeded(room);
-            }, 1100);
-          } else {
-            triggerBotTurnIfNeeded(room);
-          }
-        }
-      }, 700);
+        const choices = ['rock', 'paper', 'scissors', 'bomb', 'shield'];
+        const choice = choices[Math.floor(Math.random() * choices.length)];
+        handleArcadeAction(room, bot.id, { subAction: 'choose', data: { choice } });
+      }, baseDelay);
     }
   }
 
-  // Dots & Boxes bot
-  else if (gt === 'dots_and_boxes' && game.status === 'playing') {
-    const player = game.players[game.turn];
-    if (player && player.isBot) {
+  // Math Blitz bot
+  else if (gt === 'math_blitz' && game.status === 'playing') {
+    const bot = room.players.find(p => p.isBot);
+    if (bot) {
+      const mathTimer = setTimeout(() => {
+        if (!game || game.status !== 'playing') return;
+        const answer = diff === 'hard' ? game.data.question.answer : (Math.random() < 0.75 ? game.data.question.answer : game.data.question.options[0]);
+        handleArcadeAction(room, bot.id, { subAction: 'answer', data: { answer } });
+      }, diff === 'hard' ? 2000 : diff === 'medium' ? 3500 : 5500);
+    }
+  }
+
+  // Reaction Tap bot
+  else if (gt === 'reaction_tap' && game.status === 'playing') {
+    const bot = room.players.find(p => p.isBot);
+    if (bot) {
+      const tapTime = diff === 'hard' ? 220 : diff === 'medium' ? 340 : 480;
       setTimeout(() => {
-        const move = getDotsBotMove(game);
-        if (move) {
-          handleDotsLineClick(game, player.id, move.type, move.r, move.c);
-          io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
-          triggerBotTurnIfNeeded(room);
+        if (game.status === 'playing') {
+          handleArcadeAction(room, bot.id, { subAction: 'tap', data: { ms: tapTime } });
         }
-      }, 650);
+      }, tapTime);
     }
   }
+}
 
-  // Wordle Duel bot
-  else if (gt === 'wordle_duel' && game.status === 'playing') {
-    game.playerIds.forEach(id => {
-      const p = game.players[id];
-      if (p.isBot && !p.solved && p.guesses.length < game.maxGuesses) {
-        setTimeout(() => {
-          const guess = getWordleBotGuess(game, id);
-          if (guess) {
-            handleWordleGuess(game, id, guess);
-            io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
-          }
-        }, 1500 + Math.random() * 1000);
-      }
-    });
-  }
+function generateMathQuestion(difficulty) {
+  const max = difficulty === 'easy' ? 20 : difficulty === 'medium' ? 50 : 100;
+  const ops = difficulty === 'easy' ? ['+', '-'] : ['+', '-', 'x'];
+  const op = ops[Math.floor(Math.random() * ops.length)];
+  let a = Math.floor(Math.random() * max) + 1;
+  let b = Math.floor(Math.random() * (op === 'x' ? 12 : max)) + 1;
 
-  // 2048 bot
-  else if (gt === 'game_2048' && game.status === 'playing') {
-    game.playerIds.forEach(id => {
-      const p = game.players[id];
-      if (p.isBot && !p.gameOver) {
-        const botTimer = setInterval(() => {
-          if (!game || game.status !== 'playing' || p.gameOver) {
-            clearInterval(botTimer);
-            return;
-          }
-          const dir = get2048BotMove(game, id);
-          handle2048Move(game, id, dir);
-          io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
-        }, 500);
-      }
-    });
-  }
+  let answer = op === '+' ? a + b : op === '-' ? a - b : a * b;
+  const options = [answer, answer + 2, answer - 3, answer + 5].sort(() => Math.random() - 0.5);
+
+  return { text: `${a} ${op} ${b} = ?`, answer, options };
 }
 
 // Fallback to index.html for client routing
 app.use((req, res) => {
   res.sendFile(path.join(distPath, 'index.html'), (err) => {
-    if (err) res.status(200).send('GameVerse Multi-Game Server Live.');
+    if (err) res.status(200).send('GameVerse Multi-Arcade Server Live.');
   });
 });
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
-  console.log(`🎮 GameVerse Multi-Arcade Server running on port ${PORT}`);
+  console.log(`🎮 GameVerse 33-Game Arcade Server running on port ${PORT}`);
 });
