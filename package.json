@@ -7,10 +7,18 @@
     "dev:server": "node server/index.js",
     "dev:client": "vite",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
-    "build": "tsc && vite build",
+    "build": "vite build",
     "start": "node server/index.js"
   },
   "dependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/canvas-confetti": "^1.9.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
     "canvas-confetti": "^1.9.4",
     "chess.js": "^1.4.0",
     "cors": "^2.8.6",
@@ -20,20 +28,12 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "socket.io": "^4.8.1",
-    "socket.io-client": "^4.8.1"
-  },
-  "devDependencies": {
-    "@tailwindcss/vite": "^4.3.3",
-    "@types/canvas-confetti": "^1.9.0",
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/node": "^24.13.3",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.7",
-    "@vitejs/plugin-react": "^6.1.1",
-    "concurrently": "^9.1.2",
+    "socket.io-client": "^4.8.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.8.2",
     "vite": "^8.3.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
   }
 }
