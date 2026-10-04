@@ -6,9 +6,18 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 import { createHandCricketGame, handleHandCricketToss, handleHandCricketActionChoice, handleHandCricketSelection } from './games/handCricketManager.js';
-import { createChessGame, handleChessMove, getLegalMoves } from './games/chessManager.js';
+import { createChessGame, handleChessMove } from './games/chessManager.js';
 import { createLudoGame, rollLudoDice, moveLudoToken } from './games/ludoManager.js';
 import { createTicTacToeGame, handleTicTacToeMove, resetTicTacToeBoard } from './games/tictactoeManager.js';
+import { createConnect4Game, handleConnect4Drop, getConnect4BotMove } from './games/connect4Manager.js';
+import { createBattleshipGame, handleBattleshipFire, getBattleshipBotMove } from './games/battleshipManager.js';
+import { createCheckersGame, handleCheckersMove, getCheckersBotMove } from './games/checkersManager.js';
+import { createMemoryMatchGame, handleMemoryFlip, resetMemoryFlips } from './games/memoryMatchManager.js';
+import { createDotsAndBoxesGame, handleDotsLineClick, getDotsBotMove } from './games/dotsAndBoxesManager.js';
+import { createWordleDuelGame, handleWordleGuess, getWordleBotGuess } from './games/wordleDuelManager.js';
+import { create2048Game, handle2048Move, get2048BotMove } from './games/game2048Manager.js';
+import { createSnakeGame, handleSnakeDirection, tickSnakeGame, getSnakeBotDirection } from './games/snakeBattleManager.js';
+import { createPongGame, handlePaddleMove, tickPongGame, getPongBotY } from './games/pongManager.js';
 import { Chess } from 'chess.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -27,7 +36,6 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
-// Serve static frontend assets if built
 const distPath = path.join(__dirname, '../dist');
 app.use(express.static(distPath));
 
@@ -35,10 +43,10 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime(), roomsCount: rooms.size });
 });
 
-// Rooms State
+// Rooms state
 const rooms = new Map();
-// Socket ID to player info map
 const socketPlayerMap = new Map();
+const roomTickIntervals = new Map();
 
 function generateRoomCode() {
   const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -49,35 +57,49 @@ function generateRoomCode() {
   return result;
 }
 
+const MAX_PLAYERS_MAP = {
+  hand_cricket: 2,
+  chess: 2,
+  ludo: 4,
+  tictactoe: 2,
+  connect4: 2,
+  battleship: 2,
+  checkers: 2,
+  memory_match: 2,
+  dots_and_boxes: 2,
+  wordle_duel: 2,
+  game_2048: 2,
+  snake_battle: 2,
+  pong_duel: 2
+};
+
 function getSafeRoomData(room) {
   return {
     code: room.code,
     hostId: room.hostId,
     gameType: room.gameType,
     maxPlayers: room.maxPlayers,
-    status: room.status, // 'lobby' | 'playing'
+    status: room.status,
     players: room.players,
     gameState: room.gameState,
     chat: room.chat
   };
 }
 
-io.on('connection', (socket) => {
-  console.log(`[Socket Connected] ${socket.id}`);
+function clearRoomInterval(roomCode) {
+  if (roomTickIntervals.has(roomCode)) {
+    clearInterval(roomTickIntervals.get(roomCode));
+    roomTickIntervals.delete(roomCode);
+  }
+}
 
+io.on('connection', (socket) => {
   // 1. Create Room
   socket.on('create_room', ({ playerName, avatar, gameType = 'hand_cricket' }, callback) => {
     let code = generateRoomCode();
     while (rooms.has(code)) {
       code = generateRoomCode();
     }
-
-    const maxPlayersMap = {
-      hand_cricket: 2,
-      chess: 2,
-      tictactoe: 2,
-      ludo: 4
-    };
 
     const hostPlayer = {
       id: socket.id,
@@ -92,7 +114,7 @@ io.on('connection', (socket) => {
       code,
       hostId: socket.id,
       gameType,
-      maxPlayers: maxPlayersMap[gameType] || 2,
+      maxPlayers: MAX_PLAYERS_MAP[gameType] || 2,
       status: 'lobby',
       players: [hostPlayer],
       gameState: null,
@@ -103,7 +125,6 @@ io.on('connection', (socket) => {
     socketPlayerMap.set(socket.id, { roomCode: code, playerId: socket.id, name: hostPlayer.name });
     socket.join(code);
 
-    console.log(`[Room Created] ${code} by ${hostPlayer.name} (Game: ${gameType})`);
     if (typeof callback === 'function') callback({ success: true, room: getSafeRoomData(room) });
   });
 
@@ -113,17 +134,17 @@ io.on('connection', (socket) => {
     const room = rooms.get(upperCode);
 
     if (!room) {
-      if (typeof callback === 'function') callback({ success: false, message: 'Room code not found' });
+      if (typeof callback === 'function') callback({ success: false, message: 'Room not found' });
       return;
     }
 
     if (room.status === 'playing') {
-      if (typeof callback === 'function') callback({ success: false, message: 'Game already in progress' });
+      if (typeof callback === 'function') callback({ success: false, message: 'Match in progress' });
       return;
     }
 
     if (room.players.length >= room.maxPlayers) {
-      if (typeof callback === 'function') callback({ success: false, message: 'Room is already full' });
+      if (typeof callback === 'function') callback({ success: false, message: 'Room is full' });
       return;
     }
 
@@ -144,7 +165,7 @@ io.on('connection', (socket) => {
     if (typeof callback === 'function') callback({ success: true, room: getSafeRoomData(room) });
   });
 
-  // 3. Add Bot to Room
+  // 3. Add Bot
   socket.on('add_bot', ({ roomCode }, callback) => {
     const room = rooms.get(roomCode);
     if (!room || room.hostId !== socket.id) return;
@@ -153,8 +174,8 @@ io.on('connection', (socket) => {
       return;
     }
 
-    const botAvatars = ['🤖', '👾', '🚀', '⚡', '🧠'];
-    const botNames = ['CyberBot', 'RoboPro', 'MatrixAI', 'AlphaZero', 'VoltAI'];
+    const botAvatars = ['🤖', '👾', '🚀', '⚡', '🧠', '🦾'];
+    const botNames = ['CyberBot', 'RoboPro', 'MatrixAI', 'AlphaZero', 'VoltAI', 'PixelBot'];
     const idx = room.players.length;
 
     const botPlayer = {
@@ -171,7 +192,7 @@ io.on('connection', (socket) => {
     if (typeof callback === 'function') callback({ success: true, room: getSafeRoomData(room) });
   });
 
-  // 4. Remove Bot / Kick Player
+  // 4. Remove Player / Bot
   socket.on('remove_player', ({ roomCode, targetId }) => {
     const room = rooms.get(roomCode);
     if (!room || room.hostId !== socket.id) return;
@@ -180,21 +201,14 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('room_updated', getSafeRoomData(room));
   });
 
-  // 5. Change Game Type
+  // 5. Change Game
   socket.on('change_game', ({ roomCode, gameType }) => {
     const room = rooms.get(roomCode);
     if (!room || room.hostId !== socket.id) return;
 
-    const maxPlayersMap = {
-      hand_cricket: 2,
-      chess: 2,
-      tictactoe: 2,
-      ludo: 4
-    };
-
+    clearRoomInterval(roomCode);
     room.gameType = gameType;
-    room.maxPlayers = maxPlayersMap[gameType] || 2;
-    // Trim excess players/bots if needed
+    room.maxPlayers = MAX_PLAYERS_MAP[gameType] || 2;
     if (room.players.length > room.maxPlayers) {
       room.players = room.players.slice(0, room.maxPlayers);
     }
@@ -224,57 +238,39 @@ io.on('connection', (socket) => {
       return;
     }
 
-    room.status = 'playing';
-
-    if (room.gameType === 'hand_cricket') {
-      room.gameState = createHandCricketGame(room.players[0], room.players[1]);
-    } else if (room.gameType === 'chess') {
-      room.gameState = createChessGame(room.players[0], room.players[1]);
-    } else if (room.gameType === 'ludo') {
-      room.gameState = createLudoGame(room.players);
-    } else if (room.gameType === 'tictactoe') {
-      room.gameState = createTicTacToeGame(room.players[0], room.players[1]);
-    }
+    clearRoomInterval(roomCode);
+    initializeGame(room);
 
     io.to(roomCode).emit('game_started', getSafeRoomData(room));
     if (typeof callback === 'function') callback({ success: true });
 
-    // Check if initial turn is a bot
     triggerBotTurnIfNeeded(room);
   });
 
-  // 8. Rematch / Reset Game
+  // 8. Rematch Game
   socket.on('rematch_game', ({ roomCode }) => {
     const room = rooms.get(roomCode);
     if (!room) return;
 
-    room.status = 'playing';
-    if (room.gameType === 'hand_cricket') {
-      room.gameState = createHandCricketGame(room.players[0], room.players[1]);
-    } else if (room.gameType === 'chess') {
-      // Alternate white/black
-      room.gameState = createChessGame(room.players[1], room.players[0]);
-    } else if (room.gameType === 'ludo') {
-      room.gameState = createLudoGame(room.players);
-    } else if (room.gameType === 'tictactoe') {
-      room.gameState = resetTicTacToeBoard(room.gameState || createTicTacToeGame(room.players[0], room.players[1]));
-    }
+    clearRoomInterval(roomCode);
+    initializeGame(room);
 
     io.to(roomCode).emit('game_state_updated', getSafeRoomData(room));
     triggerBotTurnIfNeeded(room);
   });
 
-  // 9. Back to Lobby
+  // 9. Return to Lobby
   socket.on('return_to_lobby', ({ roomCode }) => {
     const room = rooms.get(roomCode);
     if (!room || room.hostId !== socket.id) return;
 
+    clearRoomInterval(roomCode);
     room.status = 'lobby';
     room.gameState = null;
     io.to(roomCode).emit('room_updated', getSafeRoomData(room));
   });
 
-  // 10. Chat & Reactions
+  // 10. Live Chat & Reactions
   socket.on('send_chat', ({ roomCode, text, type = 'text' }) => {
     const room = rooms.get(roomCode);
     if (!room) return;
@@ -286,13 +282,12 @@ io.on('connection', (socket) => {
       avatar: player.avatar,
       senderId: socket.id,
       text,
-      type, // 'text' | 'reaction'
+      type,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
     room.chat.push(chatItem);
     if (room.chat.length > 50) room.chat.shift();
-
     io.to(roomCode).emit('new_chat_message', chatItem);
   });
 
@@ -301,39 +296,119 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomCode);
     if (!room || !room.gameState) return;
 
-    if (room.gameType === 'hand_cricket') {
-      handleHandCricketAction(room, socket.id, action, payload);
-    } else if (room.gameType === 'chess') {
-      handleChessAction(room, socket.id, action, payload);
-    } else if (room.gameType === 'ludo') {
-      handleLudoAction(room, socket.id, action, payload);
-    } else if (room.gameType === 'tictactoe') {
-      handleTicTacToeAction(room, socket.id, action, payload);
+    const game = room.gameState;
+    const gType = room.gameType;
+
+    if (gType === 'hand_cricket') {
+      if (action === 'toss_call') {
+        handleHandCricketToss(game, socket.id, payload.choice);
+        io.to(roomCode).emit('game_state_updated', getSafeRoomData(room));
+        triggerBotTurnIfNeeded(room);
+      } else if (action === 'choose_action') {
+        handleHandCricketActionChoice(game, socket.id, payload.action);
+        io.to(roomCode).emit('game_state_updated', getSafeRoomData(room));
+        triggerBotTurnIfNeeded(room);
+      } else if (action === 'select_number') {
+        const { resolved } = handleHandCricketSelection(game, socket.id, payload.number);
+        io.to(roomCode).emit('game_state_updated', getSafeRoomData(room));
+        if (!resolved) triggerBotTurnIfNeeded(room);
+      }
+    } else if (gType === 'chess' && action === 'move') {
+      const { valid } = handleChessMove(game, socket.id, payload.from, payload.to, payload.promotion);
+      if (valid) {
+        io.to(roomCode).emit('game_state_updated', getSafeRoomData(room));
+        triggerBotTurnIfNeeded(room);
+      }
+    } else if (gType === 'ludo') {
+      if (action === 'roll_dice') {
+        const res = rollLudoDice(game, socket.id);
+        if (res.valid) {
+          io.to(roomCode).emit('game_state_updated', getSafeRoomData(room));
+          triggerBotTurnIfNeeded(room);
+        }
+      } else if (action === 'move_token') {
+        const res = moveLudoToken(game, socket.id, payload.tokenIndex);
+        if (res.valid) {
+          io.to(roomCode).emit('game_state_updated', getSafeRoomData(room));
+          triggerBotTurnIfNeeded(room);
+        }
+      }
+    } else if (gType === 'tictactoe' && action === 'move') {
+      const res = handleTicTacToeMove(game, socket.id, payload.cellIndex);
+      if (res.valid) {
+        io.to(roomCode).emit('game_state_updated', getSafeRoomData(room));
+        triggerBotTurnIfNeeded(room);
+      }
+    } else if (gType === 'connect4' && action === 'drop_disc') {
+      const res = handleConnect4Drop(game, socket.id, payload.col);
+      if (res.valid) {
+        io.to(roomCode).emit('game_state_updated', getSafeRoomData(room));
+        triggerBotTurnIfNeeded(room);
+      }
+    } else if (gType === 'battleship' && action === 'fire') {
+      const res = handleBattleshipFire(game, socket.id, payload.r, payload.c);
+      if (res.valid) {
+        io.to(roomCode).emit('game_state_updated', getSafeRoomData(room));
+        triggerBotTurnIfNeeded(room);
+      }
+    } else if (gType === 'checkers' && action === 'move') {
+      const res = handleCheckersMove(game, socket.id, payload.from, payload.to);
+      if (res.valid) {
+        io.to(roomCode).emit('game_state_updated', getSafeRoomData(room));
+        triggerBotTurnIfNeeded(room);
+      }
+    } else if (gType === 'memory_match' && action === 'flip_card') {
+      const res = handleMemoryFlip(game, socket.id, payload.cardIndex);
+      if (res.valid) {
+        io.to(roomCode).emit('game_state_updated', getSafeRoomData(room));
+        if (res.needsReset) {
+          setTimeout(() => {
+            resetMemoryFlips(game);
+            io.to(roomCode).emit('game_state_updated', getSafeRoomData(room));
+            triggerBotTurnIfNeeded(room);
+          }, 1100);
+        } else {
+          triggerBotTurnIfNeeded(room);
+        }
+      }
+    } else if (gType === 'dots_and_boxes' && action === 'draw_line') {
+      const res = handleDotsLineClick(game, socket.id, payload.type, payload.r, payload.c);
+      if (res.valid) {
+        io.to(roomCode).emit('game_state_updated', getSafeRoomData(room));
+        triggerBotTurnIfNeeded(room);
+      }
+    } else if (gType === 'wordle_duel' && action === 'guess_word') {
+      const res = handleWordleGuess(game, socket.id, payload.word);
+      if (res.valid) {
+        io.to(roomCode).emit('game_state_updated', getSafeRoomData(room));
+      }
+    } else if (gType === 'game_2048' && action === 'slide') {
+      const res = handle2048Move(game, socket.id, payload.direction);
+      if (res.valid) {
+        io.to(roomCode).emit('game_state_updated', getSafeRoomData(room));
+      }
+    } else if (gType === 'snake_battle' && action === 'change_dir') {
+      handleSnakeDirection(game, socket.id, payload.direction);
+    } else if (gType === 'pong_duel' && action === 'move_paddle') {
+      handlePaddleMove(game, socket.id, payload.targetY);
     }
   });
 
   // Disconnect
   socket.on('disconnect', () => {
-    console.log(`[Socket Disconnected] ${socket.id}`);
     const info = socketPlayerMap.get(socket.id);
     if (info) {
       const room = rooms.get(info.roomCode);
       if (room) {
         room.players = room.players.filter(p => p.id !== socket.id);
         if (room.players.length === 0) {
+          clearRoomInterval(info.roomCode);
           rooms.delete(info.roomCode);
-          console.log(`[Room Deleted] ${info.roomCode} (Empty)`);
         } else {
-          // If host left, assign new host
           if (room.hostId === socket.id) {
-            const nextHuman = room.players.find(p => !p.isBot);
-            if (nextHuman) {
-              room.hostId = nextHuman.id;
-              nextHuman.isHost = true;
-            } else {
-              room.hostId = room.players[0].id;
-              room.players[0].isHost = true;
-            }
+            const nextHuman = room.players.find(p => !p.isBot) || room.players[0];
+            room.hostId = nextHuman.id;
+            nextHuman.isHost = true;
           }
           io.to(info.roomCode).emit('room_updated', getSafeRoomData(room));
         }
@@ -343,108 +418,118 @@ io.on('connection', (socket) => {
   });
 });
 
-// --- Action Handlers & Bot Integrations ---
+function initializeGame(room) {
+  room.status = 'playing';
+  const [p1, p2, p3, p4] = room.players;
+  const gt = room.gameType;
 
-function handleHandCricketAction(room, playerId, action, payload) {
-  const game = room.gameState;
+  if (gt === 'hand_cricket') room.gameState = createHandCricketGame(p1, p2);
+  else if (gt === 'chess') room.gameState = createChessGame(p1, p2);
+  else if (gt === 'ludo') room.gameState = createLudoGame(room.players);
+  else if (gt === 'tictactoe') room.gameState = createTicTacToeGame(p1, p2);
+  else if (gt === 'connect4') room.gameState = createConnect4Game(p1, p2);
+  else if (gt === 'battleship') room.gameState = createBattleshipGame(p1, p2);
+  else if (gt === 'checkers') room.gameState = createCheckersGame(p1, p2);
+  else if (gt === 'memory_match') room.gameState = createMemoryMatchGame(p1, p2);
+  else if (gt === 'dots_and_boxes') room.gameState = createDotsAndBoxesGame(p1, p2);
+  else if (gt === 'wordle_duel') room.gameState = createWordleDuelGame(p1, p2);
+  else if (gt === 'game_2048') room.gameState = create2048Game(p1, p2);
+  else if (gt === 'snake_battle') {
+    room.gameState = createSnakeGame(p1, p2);
+    startSnakeInterval(room);
+  } else if (gt === 'pong_duel') {
+    room.gameState = createPongGame(p1, p2);
+    startPongInterval(room);
+  }
+}
 
-  if (action === 'toss_call') {
-    handleHandCricketToss(game, playerId, payload.choice);
+function startSnakeInterval(room) {
+  clearRoomInterval(room.code);
+  const interval = setInterval(() => {
+    if (!room.gameState || room.status !== 'playing' || room.gameState.status !== 'playing') {
+      clearRoomInterval(room.code);
+      return;
+    }
+    // Bot directions
+    room.gameState.playerIds.forEach(id => {
+      const p = room.gameState.players[id];
+      if (p.isBot && p.alive) {
+        const botDir = getSnakeBotDirection(room.gameState, id);
+        handleSnakeDirection(room.gameState, id, botDir);
+      }
+    });
+
+    tickSnakeGame(room.gameState);
     io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
-    triggerBotTurnIfNeeded(room);
-  } else if (action === 'choose_action') {
-    handleHandCricketActionChoice(game, playerId, payload.action);
+
+    if (room.gameState.status === 'game_over') {
+      clearRoomInterval(room.code);
+    }
+  }, 160);
+  roomTickIntervals.set(room.code, interval);
+}
+
+function startPongInterval(room) {
+  clearRoomInterval(room.code);
+  const interval = setInterval(() => {
+    if (!room.gameState || room.status !== 'playing' || room.gameState.status !== 'playing') {
+      clearRoomInterval(room.code);
+      return;
+    }
+    // Bot paddle
+    room.gameState.playerIds.forEach(id => {
+      const p = room.gameState.players[id];
+      if (p.isBot) {
+        const botY = getPongBotY(room.gameState, id);
+        handlePaddleMove(room.gameState, id, botY);
+      }
+    });
+
+    tickPongGame(room.gameState);
     io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
-    triggerBotTurnIfNeeded(room);
-  } else if (action === 'select_number') {
-    const { resolved } = handleHandCricketSelection(game, playerId, payload.number);
-    io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
-    if (!resolved) {
-      triggerBotTurnIfNeeded(room);
+
+    if (room.gameState.status === 'game_over') {
+      clearRoomInterval(room.code);
     }
-  }
+  }, 35);
+  roomTickIntervals.set(room.code, interval);
 }
 
-function handleChessAction(room, playerId, action, payload) {
-  const game = room.gameState;
-  if (action === 'move') {
-    const { valid, message } = handleChessMove(game, playerId, payload.from, payload.to, payload.promotion);
-    if (valid) {
-      io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
-      triggerBotTurnIfNeeded(room);
-    }
-  }
-}
-
-function handleLudoAction(room, playerId, action, payload) {
-  const game = room.gameState;
-  if (action === 'roll_dice') {
-    const res = rollLudoDice(game, playerId);
-    if (res.valid) {
-      io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
-      triggerBotTurnIfNeeded(room);
-    }
-  } else if (action === 'move_token') {
-    const res = moveLudoToken(game, playerId, payload.tokenIndex);
-    if (res.valid) {
-      io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
-      triggerBotTurnIfNeeded(room);
-    }
-  }
-}
-
-function handleTicTacToeAction(room, playerId, action, payload) {
-  const game = room.gameState;
-  if (action === 'move') {
-    const res = handleTicTacToeMove(game, playerId, payload.cellIndex);
-    if (res.valid) {
-      io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
-      triggerBotTurnIfNeeded(room);
-    }
-  }
-}
-
-// --- Autonomous Bot AI Dispatcher ---
+// Bot AI Dispatcher
 function triggerBotTurnIfNeeded(room) {
   if (!room.gameState || room.status !== 'playing') return;
 
   const game = room.gameState;
+  const gt = room.gameType;
 
-  // 1. Hand Cricket Bot
-  if (room.gameType === 'hand_cricket') {
+  // Hand cricket bot
+  if (gt === 'hand_cricket') {
     if (game.status === 'toss') {
       const caller = room.players.find(p => p.id === game.toss.callerId);
       if (caller && caller.isBot) {
         setTimeout(() => {
-          const choices = ['heads', 'tails'];
-          handleHandCricketToss(game, caller.id, choices[Math.floor(Math.random() * 2)]);
+          handleHandCricketToss(game, caller.id, Math.random() < 0.5 ? 'heads' : 'tails');
           io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
           triggerBotTurnIfNeeded(room);
-        }, 800);
+        }, 700);
       }
     } else if (game.status === 'choose_action') {
       const winner = room.players.find(p => p.id === game.toss.winnerId);
       if (winner && winner.isBot) {
         setTimeout(() => {
-          const action = Math.random() < 0.6 ? 'bat' : 'bowl';
-          handleHandCricketActionChoice(game, winner.id, action);
+          handleHandCricketActionChoice(game, winner.id, Math.random() < 0.6 ? 'bat' : 'bowl');
           io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
           triggerBotTurnIfNeeded(room);
-        }, 800);
+        }, 700);
       }
     } else if (game.status === 'innings1' || game.status === 'innings2') {
-      const batsman = room.players.find(p => p.id === game.currentBatsmanId);
-      const bowler = room.players.find(p => p.id === game.currentBowlerId);
-
-      // Check if bot needs to select a number
-      [batsman, bowler].forEach(player => {
-        if (player && player.isBot && game.currentTurnSelections[player.id] === undefined) {
+      [game.currentBatsmanId, game.currentBowlerId].forEach(id => {
+        const p = room.players.find(pl => pl.id === id);
+        if (p && p.isBot && game.currentTurnSelections[p.id] === undefined) {
           setTimeout(() => {
-            const numbers = [1, 2, 3, 4, 5, 6];
-            // slight bias to realistic cricket scoring (4s, 6s, singles)
             const weights = [1, 2, 2, 4, 3, 6, 4, 6];
             const num = weights[Math.floor(Math.random() * weights.length)];
-            const { resolved } = handleHandCricketSelection(game, player.id, num);
+            const { resolved } = handleHandCricketSelection(game, p.id, num);
             io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
             if (!resolved) triggerBotTurnIfNeeded(room);
           }, 600);
@@ -453,123 +538,179 @@ function triggerBotTurnIfNeeded(room) {
     }
   }
 
-  // 2. Chess Bot
-  else if (room.gameType === 'chess' && game.status === 'playing') {
-    const activeColor = game.turn;
-    const player = game.players[activeColor];
+  // Chess bot
+  else if (gt === 'chess' && game.status === 'playing') {
+    const player = game.players[game.turn];
     if (player && player.isBot) {
       setTimeout(() => {
         try {
           const chess = new Chess(game.fen);
           const legalMoves = chess.moves({ verbose: true });
           if (legalMoves.length > 0) {
-            // Prioritize captures or checks
             const captures = legalMoves.filter(m => m.captured);
-            const checks = legalMoves.filter(m => m.san.includes('+'));
-            let chosenMove;
-            if (captures.length > 0 && Math.random() < 0.7) {
-              chosenMove = captures[Math.floor(Math.random() * captures.length)];
-            } else if (checks.length > 0 && Math.random() < 0.6) {
-              chosenMove = checks[Math.floor(Math.random() * checks.length)];
-            } else {
-              chosenMove = legalMoves[Math.floor(Math.random() * legalMoves.length)];
-            }
-
-            handleChessMove(game, player.id, chosenMove.from, chosenMove.to, chosenMove.promotion || 'q');
+            const move = captures.length > 0 && Math.random() < 0.7
+              ? captures[Math.floor(Math.random() * captures.length)]
+              : legalMoves[Math.floor(Math.random() * legalMoves.length)];
+            handleChessMove(game, player.id, move.from, move.to, move.promotion || 'q');
             io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
             triggerBotTurnIfNeeded(room);
           }
-        } catch (e) {
-          console.error('[Chess Bot Error]', e);
-        }
+        } catch {}
       }, 700);
     }
   }
 
-  // 3. Ludo Bot
-  else if (room.gameType === 'ludo' && game.status === 'playing') {
-    const currentColor = game.currentColor;
-    const player = game.players[currentColor];
+  // Ludo bot
+  else if (gt === 'ludo' && game.status === 'playing') {
+    const player = game.players[game.currentColor];
     if (player && player.isBot) {
       if (!game.awaitingMove) {
-        // Step 1: Roll dice
         setTimeout(() => {
           const res = rollLudoDice(game, player.id);
           io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
-          if (res.valid && !res.autoPassed && game.awaitingMove) {
-            triggerBotTurnIfNeeded(room);
-          } else if (res.valid && res.autoPassed) {
-            triggerBotTurnIfNeeded(room);
-          }
+          triggerBotTurnIfNeeded(room);
         }, 700);
-      } else {
-        // Step 2: Move a token
+      } else if (game.movableTokens.length > 0) {
         setTimeout(() => {
-          if (game.movableTokens.length > 0) {
-            // AI chooses best token:
-            // 1. Move to home (step + dice === 56)
-            // 2. Capture opponent if possible
-            // 3. Bring token out of yard on 6
-            // 4. Furthest token on track
-            let chosenToken = game.movableTokens[0];
-            const dice = game.diceValue;
-
-            for (const tIdx of game.movableTokens) {
-              const cur = player.tokens[tIdx];
-              if (cur + dice === 56) {
-                chosenToken = tIdx;
-                break;
-              }
-              if (cur === -1 && dice === 6) {
-                chosenToken = tIdx;
-              }
-            }
-
-            const res = moveLudoToken(game, player.id, chosenToken);
-            io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
-            if (res.valid) {
-              triggerBotTurnIfNeeded(room);
-            }
+          let chosen = game.movableTokens[0];
+          for (const idx of game.movableTokens) {
+            if (player.tokens[idx] + game.diceValue === 56) { chosen = idx; break; }
+            if (player.tokens[idx] === -1 && game.diceValue === 6) { chosen = idx; break; }
           }
+          moveLudoToken(game, player.id, chosen);
+          io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
+          triggerBotTurnIfNeeded(room);
         }, 600);
       }
     }
   }
 
-  // 4. Tic-Tac-Toe Bot
-  else if (room.gameType === 'tictactoe' && game.status === 'playing') {
-    const symbol = game.turn;
-    const player = game.players[symbol];
+  // Connect 4 bot
+  else if (gt === 'connect4' && game.status === 'playing') {
+    const player = game.players[game.turn];
     if (player && player.isBot) {
       setTimeout(() => {
-        const available = [];
-        game.board.forEach((cell, idx) => {
-          if (cell === null) available.push(idx);
-        });
+        const col = getConnect4BotMove(game);
+        handleConnect4Drop(game, player.id, col);
+        io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
+        triggerBotTurnIfNeeded(room);
+      }, 600);
+    }
+  }
 
-        if (available.length > 0) {
-          // Pick center if free, otherwise random
-          let choice = available.includes(4) ? 4 : available[Math.floor(Math.random() * available.length)];
-          handleTicTacToeMove(game, player.id, choice);
+  // Battleship bot
+  else if (gt === 'battleship' && game.status === 'playing') {
+    const player = game.players[game.turn];
+    if (player && player.isBot) {
+      setTimeout(() => {
+        const [r, c] = getBattleshipBotMove(game, player.id);
+        handleBattleshipFire(game, player.id, r, c);
+        io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
+        triggerBotTurnIfNeeded(room);
+      }, 700);
+    }
+  }
+
+  // Checkers bot
+  else if (gt === 'checkers' && game.status === 'playing') {
+    const player = game.players[game.turn];
+    if (player && player.isBot) {
+      setTimeout(() => {
+        const move = getCheckersBotMove(game);
+        if (move) {
+          handleCheckersMove(game, player.id, move.from, move.to);
           io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
           triggerBotTurnIfNeeded(room);
         }
-      }, 500);
+      }, 700);
     }
+  }
+
+  // Memory Match bot
+  else if (gt === 'memory_match' && game.status === 'playing') {
+    const player = game.players[game.turn];
+    if (player && player.isBot && game.currentFlips.length < 2) {
+      setTimeout(() => {
+        const unrevealed = [];
+        game.deck.forEach((c, i) => {
+          if (!c.isMatched && !c.isFlipped) unrevealed.push(i);
+        });
+        if (unrevealed.length > 0) {
+          const pick = unrevealed[Math.floor(Math.random() * unrevealed.length)];
+          const res = handleMemoryFlip(game, player.id, pick);
+          io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
+          if (res.needsReset) {
+            setTimeout(() => {
+              resetMemoryFlips(game);
+              io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
+              triggerBotTurnIfNeeded(room);
+            }, 1100);
+          } else {
+            triggerBotTurnIfNeeded(room);
+          }
+        }
+      }, 700);
+    }
+  }
+
+  // Dots & Boxes bot
+  else if (gt === 'dots_and_boxes' && game.status === 'playing') {
+    const player = game.players[game.turn];
+    if (player && player.isBot) {
+      setTimeout(() => {
+        const move = getDotsBotMove(game);
+        if (move) {
+          handleDotsLineClick(game, player.id, move.type, move.r, move.c);
+          io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
+          triggerBotTurnIfNeeded(room);
+        }
+      }, 650);
+    }
+  }
+
+  // Wordle Duel bot
+  else if (gt === 'wordle_duel' && game.status === 'playing') {
+    game.playerIds.forEach(id => {
+      const p = game.players[id];
+      if (p.isBot && !p.solved && p.guesses.length < game.maxGuesses) {
+        setTimeout(() => {
+          const guess = getWordleBotGuess(game, id);
+          if (guess) {
+            handleWordleGuess(game, id, guess);
+            io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
+          }
+        }, 1500 + Math.random() * 1000);
+      }
+    });
+  }
+
+  // 2048 bot
+  else if (gt === 'game_2048' && game.status === 'playing') {
+    game.playerIds.forEach(id => {
+      const p = game.players[id];
+      if (p.isBot && !p.gameOver) {
+        const botTimer = setInterval(() => {
+          if (!game || game.status !== 'playing' || p.gameOver) {
+            clearInterval(botTimer);
+            return;
+          }
+          const dir = get2048BotMove(game, id);
+          handle2048Move(game, id, dir);
+          io.to(room.code).emit('game_state_updated', getSafeRoomData(room));
+        }, 500);
+      }
+    });
   }
 }
 
-// Fallback to index.html for client routing (Express 5 compatible)
+// Fallback to index.html for client routing
 app.use((req, res) => {
   res.sendFile(path.join(distPath, 'index.html'), (err) => {
-    if (err) {
-      res.status(200).send('GameVerse API Server Running. Run frontend in dev or build dist.');
-    }
+    if (err) res.status(200).send('GameVerse Multi-Game Server Live.');
   });
 });
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
-  console.log(`🎮 GameVerse Server is running on port ${PORT}`);
-  console.log(`🌐 Ready for multiplayer connections and deployment!`);
+  console.log(`🎮 GameVerse Multi-Arcade Server running on port ${PORT}`);
 });

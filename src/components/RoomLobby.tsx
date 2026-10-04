@@ -19,14 +19,14 @@ const GAME_INFO: Record<GameType, { title: string; icon: string; min: number; ma
     icon: '🏏',
     min: 2,
     max: 2,
-    desc: 'The iconic bat & bowl battle! Guess numbers, score boundaries, take wickets!'
+    desc: 'The iconic bat & bowl battle! Guess numbers 1-6, score boundaries & chase targets.'
   },
   chess: {
     title: 'Chess Grandmaster',
     icon: '♟️',
     min: 2,
     max: 2,
-    desc: 'Classic 8x8 strategy with full FIDE rules, legal move highlights, check & checkmate.'
+    desc: 'Classic 8x8 strategy with full FIDE rules, move highlights, check & checkmate.'
   },
   ludo: {
     title: 'Ludo Supreme',
@@ -41,6 +41,69 @@ const GAME_INFO: Record<GameType, { title: string; icon: string; min: number; ma
     min: 2,
     max: 2,
     desc: 'Rapid-fire 3x3 neon grid match. Best for quick warmups and instant rematches.'
+  },
+  connect4: {
+    title: 'Connect 4 (Four in a Row)',
+    icon: '🔴',
+    min: 2,
+    max: 2,
+    desc: 'Drop discs into 7 columns with gravity. Connect 4 horizontally, vertically, or diagonally!'
+  },
+  battleship: {
+    title: 'Sea Battle (Battleship)',
+    icon: '⚓',
+    min: 2,
+    max: 2,
+    desc: 'Deploy 5 secret naval warships on 10x10 ocean grids and fire radar missiles.'
+  },
+  checkers: {
+    title: 'Checkers (Draughts)',
+    icon: '🏁',
+    min: 2,
+    max: 2,
+    desc: 'Jump over opponent pieces, make multiple leaps, and crown your pieces to Kings!'
+  },
+  memory_match: {
+    title: 'Memory Card Flip Battle',
+    icon: '🃏',
+    min: 2,
+    max: 2,
+    desc: 'Turn-based card matching duel. Match emoji pairs to seize extra turns!'
+  },
+  dots_and_boxes: {
+    title: 'Dots & Boxes',
+    icon: '📦',
+    min: 2,
+    max: 2,
+    desc: 'Connect dots on the grid. Complete 1x1 boxes to claim territory and score points!'
+  },
+  wordle_duel: {
+    title: 'Wordle Guess Duel',
+    icon: '🔤',
+    min: 2,
+    max: 2,
+    desc: 'Head-to-head word race! Solve the 5-letter hidden word with color tile clues.'
+  },
+  game_2048: {
+    title: '2048 Speed Rush',
+    icon: '🔢',
+    min: 2,
+    max: 2,
+    desc: 'Slide and merge identical numbered tiles. Compete for the highest score!'
+  },
+  snake_battle: {
+    title: 'Snake Arena Battle',
+    icon: '🐍',
+    min: 2,
+    max: 2,
+    desc: 'Realtime 2-player combat! Eat apples, grow massive, and trap opponent trails.'
+  },
+  pong_duel: {
+    title: 'Air Hockey / Pong Duel',
+    icon: '🏓',
+    min: 2,
+    max: 2,
+    desc: 'High-speed paddle deflection arena. Defend your goal and score first to 5 points!'
   }
 };
 
@@ -57,7 +120,7 @@ export const RoomLobby: React.FC<RoomLobbyProps> = ({
   const isHost = room.hostId === myPlayerId;
   const myPlayer = room.players.find(p => p.id === myPlayerId);
 
-  const currentGame = GAME_INFO[room.gameType];
+  const currentGame = GAME_INFO[room.gameType] || GAME_INFO.hand_cricket;
   const canStart = room.players.length >= 2;
 
   const copyInvite = () => {
@@ -104,28 +167,30 @@ export const RoomLobby: React.FC<RoomLobbyProps> = ({
 
         {/* Host Game Switcher */}
         {isHost && (
-          <div className="mt-6 pt-5 border-t border-slate-800 flex flex-wrap items-center justify-center gap-2">
-            <span className="text-xs font-bold text-slate-400 mr-2 flex items-center space-x-1">
+          <div className="mt-6 pt-5 border-t border-slate-800">
+            <div className="text-xs font-bold text-slate-400 mb-2 flex items-center justify-center space-x-1">
               <Crown className="w-3.5 h-3.5 text-amber-400" />
-              <span>Switch Game:</span>
-            </span>
-            {(['hand_cricket', 'ludo', 'chess', 'tictactoe'] as GameType[]).map((g) => (
-              <button
-                key={g}
-                onClick={() => {
-                  sounds.playClick();
-                  onChangeGame(g);
-                }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${
-                  room.gameType === g
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                    : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800'
-                }`}
-              >
-                <span>{GAME_INFO[g].icon}</span>
-                <span>{GAME_INFO[g].title}</span>
-              </button>
-            ))}
+              <span>Switch Game in this Room (13 Games):</span>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-1.5 max-h-36 overflow-y-auto p-1">
+              {(Object.keys(GAME_INFO) as GameType[]).map((g) => (
+                <button
+                  key={g}
+                  onClick={() => {
+                    sounds.playClick();
+                    onChangeGame(g);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${
+                    room.gameType === g
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                      : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800'
+                  }`}
+                >
+                  <span>{GAME_INFO[g].icon}</span>
+                  <span>{GAME_INFO[g].title.split(' ')[0]}</span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -204,7 +269,6 @@ export const RoomLobby: React.FC<RoomLobbyProps> = ({
                   </div>
                 </div>
 
-                {/* Host kick controls */}
                 {isHost && p.id !== myPlayerId && (
                   <button
                     onClick={() => {
